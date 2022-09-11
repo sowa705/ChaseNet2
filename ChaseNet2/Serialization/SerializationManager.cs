@@ -31,8 +31,10 @@ namespace ChaseNet2.Serialization
             
             TypeIDs.Add(id, type);
         }
-        
-        public void Serialize<T>(T obj,BinaryWriter writer)
+        /// <summary>
+        /// Writes an object to the binary writer, fails if the object does not implement IStreamSerializable or is not registered, returns written bytes
+        /// </summary>
+        public int Serialize<T>(T obj,BinaryWriter writer)
         {
             var type = obj.GetType();
             var id = TypeIDs.FirstOrDefault(x => x.Value == type).Key;
@@ -44,7 +46,7 @@ namespace ChaseNet2.Serialization
             // write type ID
             writer.Write(BitConverter.GetBytes(id));
             // write data
-            (obj as IStreamSerializable).Serialize(obj, writer);
+            return (obj as IStreamSerializable).Serialize(obj, writer)+8; //message+8 bytes for type ID
         }
         
         public object Deserialize(BinaryReader reader)

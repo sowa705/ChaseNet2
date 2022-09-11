@@ -243,7 +243,7 @@ namespace ChaseNet2
                     OutgoingMessages.TryDequeue(out var message);
                     writer.Write(message.ID);
                     writer.Write((byte) message.Type);
-                    _manager.Serializer.Serialize(message.Content,writer);
+                    int contentSize=_manager.Serializer.Serialize(message.Content,writer);
                     
                     message.State = MessageState.Sent;
                     if (message.Type==MessageType.Reliable) //we need to track this message for later
@@ -251,7 +251,7 @@ namespace ChaseNet2
                         _sentMessages.Add(message);
                     }
 
-                    currentPacketSize += 4 + 1 + 4 + 100; //TODO: add actual packet size
+                    currentPacketSize += 4 + 1 + 4 + contentSize;
                 }
                 
                 /// flush the streams

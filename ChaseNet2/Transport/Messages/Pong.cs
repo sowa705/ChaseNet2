@@ -6,9 +6,10 @@ namespace ChaseNet2.Transport.Messages
     public class Pong:IStreamSerializable
     {
         public int RandomNumber { get; set; }
-        public void Serialize(object obj, BinaryWriter writer)
+        public int Serialize(object obj, BinaryWriter writer)
         {
             writer.Write(RandomNumber);
+            return 4;
         }
 
         public void Deserialize(BinaryReader reader)

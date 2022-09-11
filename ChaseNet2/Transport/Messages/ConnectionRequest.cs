@@ -8,11 +8,12 @@ namespace ChaseNet2.Transport.Messages
     {
         public ECDiffieHellmanPublicKey PublicKey { get; set; }
         
-        public void Serialize(object obj, BinaryWriter writer)
+        public int Serialize(object obj, BinaryWriter writer)
         {
             var pkBytes = PublicKey.ToByteArray()!;
             writer.Write(pkBytes.Length);
             writer.Write(pkBytes);
+            return 4+pkBytes.Length;
         }
         public void Deserialize(BinaryReader reader)
         {
