@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace ChaseNet2
+namespace ChaseNet2.Transport
 {
     [Flags]
     public enum MessageType

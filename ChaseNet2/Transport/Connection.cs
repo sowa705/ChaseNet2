@@ -5,10 +5,9 @@ using System.IO;
 using System.IO.Compression;
 using System.Net;
 using System.Security.Cryptography;
-using ChaseNet2.Serialization;
 using ChaseNet2.Transport.Messages;
 
-namespace ChaseNet2
+namespace ChaseNet2.Transport
 {
     public class Connection
     {
@@ -17,7 +16,7 @@ namespace ChaseNet2
         private ConnectionManager _manager;
         
         public ConnectionState State { get; private set; }
-        private byte[] SharedKey;
+        private byte[] _sharedKey;
         
         public ConcurrentQueue<NetworkMessage> IncomingMessages { get; private set; }
         ConcurrentQueue<NetworkMessage> OutgoingMessages { get; set; }
@@ -26,7 +25,7 @@ namespace ChaseNet2
         
         public uint CurrentMessageId { get; private set; }
 
-        private Random rng;
+        private Random _rng;
         
         public DateTime LastPing { get; private set; }
         public DateTime LastReceivedPong { get; private set; }
@@ -37,14 +36,14 @@ namespace ChaseNet2
         
         public DateTime LastConnectionAttempt { get; private set; }
 
-        public Connection(ConnectionManager manager,IPEndPoint targetEndpoint, ECDiffieHellmanPublicKey targetPublicKey)
+        public Connection(ConnectionManager manager,ConnectionTarget target)
         {
-            PeerPublicKey = targetPublicKey;
-            RemoteEndpoint = targetEndpoint;
+            PeerPublicKey = target.PublicKey;
+            RemoteEndpoint = target.EndPoint;
             
             _manager = manager;
             
-            SharedKey = manager.ComputeSharedSecretKey(targetPublicKey);
+            _sharedKey = manager.ComputeSharedSecretKey(PeerPublicKey);
             
             IncomingMessages = new ConcurrentQueue<NetworkMessage>();
             OutgoingMessages = new ConcurrentQueue<NetworkMessage>();
@@ -54,7 +53,7 @@ namespace ChaseNet2
             LastPing = DateTime.UtcNow;
             LastReceivedPong = DateTime.UtcNow;
             
-            rng=new Random();
+            _rng=new Random();
             LastConnectionAttempt = DateTime.UtcNow;
             CreateConnectMessage();
         }
@@ -82,16 +81,21 @@ namespace ChaseNet2
         public void ReadInputStream(Stream stream)
         {
             var initializationVector = new byte[16];
-            stream.Read(initializationVector, 0, 16); //Read the initialization vector for the packet AES encryption
+            var ivCount = stream.Read(initializationVector, 0, 16); //Read the initialization vector for the packet AES encryption
+
+            if (ivCount != 16)
+            {
+                throw new Exception("Invalid initialization vector length");
+            }
             
-            /// decrypt the packet
-            using var aes = _manager.CreateAes(SharedKey,initializationVector);
-            using var cs = new CryptoStream(stream, aes.CreateDecryptor(SharedKey,initializationVector), CryptoStreamMode.Read);
+            // decrypt the packet
+            using var aes = _manager.CreateAes(_sharedKey,initializationVector);
+            using var cs = new CryptoStream(stream, aes.CreateDecryptor(_sharedKey,initializationVector), CryptoStreamMode.Read);
             
-            /// decompress the packet
+            // decompress the packet
             using var ds = new DeflateStream(cs, CompressionMode.Decompress);
             
-            /// read packet preamble
+            // read packet preamble
             var reader = new BinaryReader(ds);
 
             try
@@ -109,11 +113,9 @@ namespace ChaseNet2
                 return;
             }
             
-            
-
             try
             {
-                /// read messages (packet is a list of messages)
+                // read messages (packet is a list of messages)
                 while (true)
                 {
                     var messageID = reader.ReadUInt32();
@@ -122,6 +124,8 @@ namespace ChaseNet2
                     
                     var message = new NetworkMessage(messageID, messageType, messageContent);
                     message.State = MessageState.Received;
+                    
+                    //Console.WriteLine("Message received: " + message);
                     
                     if (messageType.HasFlag(MessageType.Reliable)) //we need to acknowledge this message
                     {
@@ -137,7 +141,7 @@ namespace ChaseNet2
                     IncomingMessages.Enqueue(message);
                 }
             }
-            catch (EndOfStreamException)
+            catch(EndOfStreamException e)
             {
             }
         }
@@ -167,7 +171,7 @@ namespace ChaseNet2
                         AveragePing = (AveragePing + (float) pingTime.TotalMilliseconds) / 2;
                         LastReceivedPong = DateTime.UtcNow;
                         
-                        Console.WriteLine($"Ping {AveragePing}");
+                        //Console.WriteLine($"Ping {AveragePing}");
                         
                         State = ConnectionState.Connected; // ping came back so obviously we are connected
                     }
@@ -189,7 +193,7 @@ namespace ChaseNet2
             if (LastPing+TimeSpan.FromSeconds(2)<DateTime.UtcNow)
             {
                 LastPing = DateTime.UtcNow;
-                RandomPingNumber = rng.Next();
+                RandomPingNumber = _rng.Next();
                 Ping p = new Ping() { RandomNumber = RandomPingNumber };
                 EnqueueMessage(MessageType.Internal, p);
             }
@@ -204,41 +208,64 @@ namespace ChaseNet2
 
             foreach (var msg in _sentMessages)
             {
-                if (msg.State==MessageState.Sent && msg.LastSent+TimeSpan.FromMilliseconds(300)<DateTime.UtcNow)
+                if (msg.State==MessageState.Sent && msg.LastSent+GetResendInterval()<DateTime.UtcNow)
                 {
+                    if (msg.ResendCount>3) //failed to deliver message
+                    {
+                        msg.State = MessageState.Failed;
+                        continue;
+                    }
                     // resend the message
                     msg.LastSent=DateTime.UtcNow;
+                    msg.ResendCount++;
                     OutgoingMessages.Enqueue(msg);
                 }
             }
             
+            // remove messages that have been delivered or failed
+            
+            _sentMessages.RemoveAll(m => m.State == MessageState.Delivered || m.State == MessageState.Failed);
+            
+            // send messages
             SendMessages();
         }
+        /// <summary>
+        /// compute the resend interval based on the average ping and reasonable lower and upper bounds
+        /// </summary>
+        /// <returns></returns>
+        public TimeSpan GetResendInterval()
+        {
+            var resendInterval = (int) (AveragePing * 3.5f); //rtt + some extra time
+            
+            resendInterval = Math.Clamp(resendInterval, 100, 600); // clamp to reasonable values
+            
+            return TimeSpan.FromMilliseconds(resendInterval);
+        }
 
-        public void SendMessages()
+        private void SendMessages()
         {
             while (!OutgoingMessages.IsEmpty)
             {
-                /// prepare the packet
+                // prepare the packet
                 var iv = _manager.GenerateInitializationVector();
                 
                 var ms = new MemoryStream();
                 // write the initialization vector for the packet AES encryption
                 ms.Write(iv);
 
-                /// prepare encryption and compression streams
-                var aes = _manager.CreateAes(SharedKey, iv);
+                // prepare encryption and compression streams
+                var aes = _manager.CreateAes(_sharedKey, iv);
                 var cs = new CryptoStream(ms, aes.CreateEncryptor(), CryptoStreamMode.Write);
                 var ds = new DeflateStream(cs, CompressionLevel.Optimal, true);
-                /// write packet preamble
+                // write packet preamble
                 var writer = new BinaryWriter(ds);
                 writer.Write(0x12345678);
                 
-                /// write messages until we run out of space or packets
+                // write messages until we run out of space or packets
                 var maxPacketSize = 32768; //intentionally small to account for potential overhead
                 
                 var currentPacketSize = 16+4; //initialization vector + preamble
-                while (!OutgoingMessages.IsEmpty && ms.Length < maxPacketSize)
+                while (!OutgoingMessages.IsEmpty && currentPacketSize < maxPacketSize)
                 {
                     OutgoingMessages.TryDequeue(out var message);
                     writer.Write(message.ID);
@@ -251,15 +278,15 @@ namespace ChaseNet2
                         _sentMessages.Add(message);
                     }
 
-                    currentPacketSize += 4 + 1 + 4 + contentSize;
+                    currentPacketSize += 4 + 1 + contentSize; //messageID + messageType + content
                 }
                 
-                /// flush the streams
+                // flush the streams
                 writer.Flush();
                 ds.Flush();
                 cs.FlushFinalBlock();
                 ms.Flush();
-                /// send the packet
+                // send the packet
                 _manager.SendPacket(ms.ToArray(), RemoteEndpoint);
             }
         }

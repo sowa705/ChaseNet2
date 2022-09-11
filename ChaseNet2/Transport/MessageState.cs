@@ -1,4 +1,4 @@
-﻿namespace ChaseNet2
+﻿namespace ChaseNet2.Transport
 {
     public enum MessageState
     {
@@ -6,5 +6,6 @@
         Sent,
         Delivered,
         Received,
+        Failed
     }
 }

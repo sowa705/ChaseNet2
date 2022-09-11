@@ -5,6 +5,8 @@ using System.Linq;
 using System.Runtime.Serialization.Formatters.Binary;
 using System.Security.Cryptography;
 using System.Text;
+using ChaseNet2.Session.Messages;
+using ChaseNet2.Transport.Messages;
 
 namespace ChaseNet2.Serialization
 {
@@ -12,7 +14,7 @@ namespace ChaseNet2.Serialization
     {
         public Dictionary<ulong, Type> TypeIDs= new Dictionary<ulong, Type>();
         
-        public void RegisterType(Type type, bool useFullName=true)
+        public ulong RegisterType(Type type, bool useFullName=true)
         {
             if (!typeof(IStreamSerializable).IsAssignableFrom(type))
             {
@@ -30,7 +32,21 @@ namespace ChaseNet2.Serialization
             Console.WriteLine("Registering type {0} with ID {1}", name, id);
             
             TypeIDs.Add(id, type);
+            return id;
         }
+
+        public void RegisterChaseNetTypes()
+        {
+            RegisterType(typeof(ConnectionRequest));
+            RegisterType(typeof(Ack));
+            RegisterType(typeof(Ping));
+            RegisterType(typeof(Pong));
+            
+            RegisterType(typeof(JoinSession));
+            RegisterType(typeof(JoinSessionResponse));
+            RegisterType(typeof(SessionUpdate));
+        }
+        
         /// <summary>
         /// Writes an object to the binary writer, fails if the object does not implement IStreamSerializable or is not registered, returns written bytes
         /// </summary>
@@ -41,12 +57,12 @@ namespace ChaseNet2.Serialization
 
             if (id==0)
             {
-                throw new ArgumentException("Type not registered", "type");
+                id=RegisterType(obj.GetType());
             }
             // write type ID
             writer.Write(BitConverter.GetBytes(id));
             // write data
-            return (obj as IStreamSerializable).Serialize(obj, writer)+8; //message+8 bytes for type ID
+            return (obj as IStreamSerializable).Serialize(writer)+8; //message+8 bytes for type ID
         }
         
         public object Deserialize(BinaryReader reader)

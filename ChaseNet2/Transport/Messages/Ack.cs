@@ -6,7 +6,7 @@ namespace ChaseNet2.Transport.Messages
     public class Ack:IStreamSerializable
     {
         public long MessageID { get; set; }
-        public int Serialize(object obj, BinaryWriter writer)
+        public int Serialize(BinaryWriter writer)
         {
             writer.Write(MessageID);
             return 8;

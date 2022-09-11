@@ -8,54 +8,48 @@ using System.Security.Cryptography;
 using ChaseNet2.Serialization;
 using ChaseNet2.Transport.Messages;
 
-namespace ChaseNet2
+namespace ChaseNet2.Transport
 {
     public class ConnectionManager
     {
         ECDiffieHellmanCng _ecdh;
 
         public ECDiffieHellmanPublicKey PublicKey { get => _ecdh.PublicKey; }
-
         private UdpClient _client;
         public List<Connection> Connections { get; private set; }
 
         private Random rng;
-        
         public bool AcceptNewConnections { get; set; }
-        
         public NetworkStatistics Statistics { get; private set; }
-        
         public SerializationManager Serializer { get; private set; }
+        
+        public EventHandler<Connection> OnConnectionEstablished;
 
         public ConnectionManager(int? port = null)
         {
             _ecdh = new ECDiffieHellmanCng();
 
             _client = port == null ? new UdpClient() : new UdpClient(port.Value);
-            
+
             Connections = new List<Connection>();
 
             Statistics = new NetworkStatistics();
             Serializer = new SerializationManager();
-            RegisterInternalSerializableTypes();
+            Serializer.RegisterChaseNetTypes();
+            
+            OnConnectionEstablished += (sender, connection) => { }; // default empty handler
             
             rng = new Random();
         }
 
-        void RegisterInternalSerializableTypes()
+        public Connection CreateConnection(ConnectionTarget target)
         {
-            Serializer.RegisterType(typeof(ConnectionRequest));
-            Serializer.RegisterType(typeof(Ack));
-            Serializer.RegisterType(typeof(Ping));
-            Serializer.RegisterType(typeof(Pong));
-        }
-
-        public Connection CreateConnection(IPEndPoint targetEndpoint, ECDiffieHellmanPublicKey targetPublicKey)
-        {
-            var c = new Connection(this, targetEndpoint, targetPublicKey);
+            var c = new Connection(this, target);
             Connections.Add(c);
 
             Statistics.ConnectionCount = Connections.Count;
+            
+            OnConnectionEstablished(this, c);
 
             return c;
         }
@@ -111,7 +105,7 @@ namespace ChaseNet2
                     {
                         ConnectionRequest request = Serializer.Deserialize<ConnectionRequest>(reader);
                         
-                        CreateConnection(remoteEP, request.PublicKey);
+                        CreateConnection(new ConnectionTarget() {EndPoint = remoteEP, PublicKey = request.PublicKey});
                         Console.WriteLine("Client connected");
                     }
                     catch
