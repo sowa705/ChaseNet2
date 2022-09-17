@@ -12,10 +12,6 @@ namespace ChaseNet2.Transport
         /// <summary>
         /// Network transport will resend the message until acknowledged by the recipient.
         /// </summary>
-        Reliable = 1,
-        /// <summary>
-        /// This is a service message used internally by network transport.
-        /// </summary>
-        Internal = 2,
+        Reliable = 1
     }
 }

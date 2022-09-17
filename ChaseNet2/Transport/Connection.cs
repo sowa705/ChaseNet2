@@ -5,13 +5,16 @@ using System.IO;
 using System.IO.Compression;
 using System.Net;
 using System.Security.Cryptography;
+using System.Threading.Tasks;
 using ChaseNet2.Transport.Messages;
 
 namespace ChaseNet2.Transport
 {
-    public class Connection
+    public partial class Connection
     {
         public ECDiffieHellmanPublicKey PeerPublicKey;
+        public ulong ConnectionId { get; private set; }
+        
         public IPEndPoint RemoteEndpoint;
         private ConnectionManager _manager;
         
@@ -21,9 +24,9 @@ namespace ChaseNet2.Transport
         public ConcurrentQueue<NetworkMessage> IncomingMessages { get; private set; }
         ConcurrentQueue<NetworkMessage> OutgoingMessages { get; set; }
         
-        List<NetworkMessage> _sentMessages;
+        List<SentMessage> _trackedSentMessages;
         
-        public uint CurrentMessageId { get; private set; }
+        public ulong CurrentMessageId { get; private set; }
 
         private Random _rng;
         
@@ -35,47 +38,105 @@ namespace ChaseNet2.Transport
         public float AveragePing { get; private set; }
         
         public DateTime LastConnectionAttempt { get; private set; }
+        
+        public Dictionary<ulong,IMessageHandler> MessageHandlers { get; private set; }
 
         public Connection(ConnectionManager manager,ConnectionTarget target)
         {
             PeerPublicKey = target.PublicKey;
             RemoteEndpoint = target.EndPoint;
+            ConnectionId = target.ConnectionID;
             
             _manager = manager;
             
-            _sharedKey = manager.ComputeSharedSecretKey(PeerPublicKey);
+            _sharedKey = manager.ComputeSharedSecretKey(PeerPublicKey,ConnectionId);
             
             IncomingMessages = new ConcurrentQueue<NetworkMessage>();
             OutgoingMessages = new ConcurrentQueue<NetworkMessage>();
+            MessageHandlers = new Dictionary<ulong, IMessageHandler>();
             
-            _sentMessages = new List<NetworkMessage>();
+            _trackedSentMessages = new List<SentMessage>();
             
             LastPing = DateTime.UtcNow;
             LastReceivedPong = DateTime.UtcNow;
             
             _rng=new Random();
             LastConnectionAttempt = DateTime.UtcNow;
+            
+            RegisterMessageHandler((ulong) InternalChannelType.ConnectionInternal,new InternalMessageHandler());
+            
             CreateConnectMessage();
         }
 
-        public NetworkMessage EnqueueMessage(MessageType type, object obj)
+        NetworkMessage EnqueueInternalMessage(MessageType type, object obj)
         {
-            var message = new NetworkMessage(CurrentMessageId++, type, obj);
+            return EnqueueMessage(type, (ulong) InternalChannelType.ConnectionInternal, obj);
+        }
+
+        public NetworkMessage EnqueueMessage(MessageType type,ulong channelID, object obj)
+        {
+            var message = new NetworkMessage(CurrentMessageId++, channelID, type, obj);
             OutgoingMessages.Enqueue(message);
+            
+            if (message.Type==MessageType.Reliable) //we need to track this message for later
+            {
+                _trackedSentMessages.Add(new SentMessage(message));
+            }
+            
             return message;
+        }
+        
+        public void RegisterMessageHandler(ulong channelID,IMessageHandler handler)
+        {
+            MessageHandlers.Add(channelID,handler);
+        }
+        
+        public void UnregisterMessageHandler(ulong channelID)
+        {
+            MessageHandlers.Remove(channelID);
+        }
+
+        public async Task WaitForDeliveryAsync(NetworkMessage message)
+        {
+            // get the message from the list of tracked messages
+            var sentMessage = _trackedSentMessages.Find(x => x.Message.ID == message.ID);
+
+            // wait for the message to be delivered
+            sentMessage.DeliveryTask=new TaskCompletionSource<bool>();
+            
+            await sentMessage.DeliveryTask.Task;
+        }
+        
+        /// <summary>
+        /// Asynchronously wait for a message to arrive on a specific channel, wont work if the channel has a handler registered 
+        /// </summary>
+        public async Task<NetworkMessage> WaitForChannelMessageAsync(ulong channelID, TimeSpan timeout)
+        {
+            // we create a handler for this channel and wait for a message to arrive
+
+            var handler = new TaskHandler();
+            RegisterMessageHandler(channelID,handler);
+            
+            var task = handler.TaskCompletionSource.Task;
+            
+            if (await Task.WhenAny(task, Task.Delay(timeout)) != task) {
+                UnregisterMessageHandler(channelID);
+                throw new Exception("Timed out waiting for message to arrive"); 
+            }
+            
+            UnregisterMessageHandler(channelID);
+            return handler.Message;
         }
         
         public void CreateConnectMessage()
         {
             BinaryWriter writer = new BinaryWriter(new MemoryStream());
-            
-            writer.Write(0xADDDDDD); //connection magic number
 
-            ConnectionRequest request = new ConnectionRequest() {PublicKey = _manager.PublicKey};
+            ConnectionRequest request = new ConnectionRequest() {PublicKey = _manager.PublicKey, ConnectionId = ConnectionId};
             
             _manager.Serializer.Serialize(request,writer);
 
-            _manager.SendPacket(((MemoryStream)writer.BaseStream).ToArray(), RemoteEndpoint);
+            _manager.SendPacket(((MemoryStream)writer.BaseStream).ToArray(), RemoteEndpoint, 0xADDDDDD);
         }
         
         public void ReadInputStream(Stream stream)
@@ -118,67 +179,33 @@ namespace ChaseNet2.Transport
                 // read messages (packet is a list of messages)
                 while (true)
                 {
-                    var messageID = reader.ReadUInt32();
+                    var messageID = reader.ReadUInt64();
+                    var channelID = reader.ReadUInt64();
                     var messageType = (MessageType) reader.ReadByte();
                     var messageContent = _manager.Serializer.Deserialize(reader);
                     
-                    var message = new NetworkMessage(messageID, messageType, messageContent);
+                    var message = new NetworkMessage(messageID, channelID, messageType, messageContent);
                     message.State = MessageState.Received;
                     
                     //Console.WriteLine("Message received: " + message);
                     
                     if (messageType.HasFlag(MessageType.Reliable)) //we need to acknowledge this message
                     {
-                        EnqueueMessage(MessageType.Internal, new Ack() { MessageID = messageID });
+                        EnqueueInternalMessage(MessageType.Unreliable, new Ack() { MessageID = messageID });
                     }
 
-                    if (messageType.HasFlag(MessageType.Internal))
+                    if (MessageHandlers.ContainsKey(channelID))
                     {
-                        HandleInternalMessage(message);
-                        continue;
+                        MessageHandlers[channelID].HandleMessage(this, message);
                     }
-                    
-                    IncomingMessages.Enqueue(message);
+                    else
+                    {
+                        IncomingMessages.Enqueue(message);
+                    }
                 }
             }
             catch(EndOfStreamException e)
             {
-            }
-        }
-
-        private void HandleInternalMessage(NetworkMessage message)
-        {
-            switch (message.Content)
-            {
-                case Ack ack:
-                    var sentMessage = _sentMessages.Find(m => m.ID == ack.MessageID);
-                    if (sentMessage != null)
-                    {
-                        sentMessage.State = MessageState.Delivered;
-                    }
-                    break;
-                case Ping ping:
-                    Pong p = new Pong();
-                    p.RandomNumber = ping.RandomNumber;
-                    EnqueueMessage(MessageType.Internal, p);
-                    break;
-                case Pong pong:
-                    if (pong.RandomNumber == RandomPingNumber)
-                    {
-                        // we got a valid pong
-                        var pingTime = (DateTime.UtcNow - LastPing)/2; // ping is half of round trip time
-                        
-                        AveragePing = (AveragePing + (float) pingTime.TotalMilliseconds) / 2;
-                        LastReceivedPong = DateTime.UtcNow;
-                        
-                        //Console.WriteLine($"Ping {AveragePing}");
-                        
-                        State = ConnectionState.Connected; // ping came back so obviously we are connected
-                    }
-                    break;
-                default:
-                    Console.WriteLine($"Unknown internal message type: {message.Content}");
-                    break;
             }
         }
 
@@ -195,36 +222,37 @@ namespace ChaseNet2.Transport
                 LastPing = DateTime.UtcNow;
                 RandomPingNumber = _rng.Next();
                 Ping p = new Ping() { RandomNumber = RandomPingNumber };
-                EnqueueMessage(MessageType.Internal, p);
+                EnqueueInternalMessage(MessageType.Unreliable, p);
             }
 
             if (LastReceivedPong+TimeSpan.FromSeconds(5)<DateTime.UtcNow&&State!=ConnectionState.Started)
             {
-                //Console.WriteLine("Disconnecting due to timeout");
+                Console.WriteLine("Disconnecting due to timeout");
                 State = ConnectionState.Disconnected; // we haven't received a pong in 5 seconds so we are probably disconnected
             }
             
             // check for messages that need to be resent
 
-            foreach (var msg in _sentMessages)
+            foreach (var msg in _trackedSentMessages)
             {
-                if (msg.State==MessageState.Sent && msg.LastSent+GetResendInterval()<DateTime.UtcNow)
+                if (msg.Message.State==MessageState.Sent && msg.LastSent+GetResendInterval()<DateTime.UtcNow)
                 {
                     if (msg.ResendCount>3) //failed to deliver message
                     {
-                        msg.State = MessageState.Failed;
+                        msg.Message.State = MessageState.Failed;
+                        msg.DeliveryTask?.SetResult(false);
                         continue;
                     }
                     // resend the message
                     msg.LastSent=DateTime.UtcNow;
                     msg.ResendCount++;
-                    OutgoingMessages.Enqueue(msg);
+                    OutgoingMessages.Enqueue(msg.Message);
                 }
             }
             
             // remove messages that have been delivered or failed
             
-            _sentMessages.RemoveAll(m => m.State == MessageState.Delivered || m.State == MessageState.Failed);
+            _trackedSentMessages.RemoveAll(m => m.Message.State == MessageState.Delivered || m.Message.State == MessageState.Failed);
             
             // send messages
             SendMessages();
@@ -269,14 +297,11 @@ namespace ChaseNet2.Transport
                 {
                     OutgoingMessages.TryDequeue(out var message);
                     writer.Write(message.ID);
+                    writer.Write(message.ChannelID);
                     writer.Write((byte) message.Type);
                     int contentSize=_manager.Serializer.Serialize(message.Content,writer);
                     
                     message.State = MessageState.Sent;
-                    if (message.Type==MessageType.Reliable) //we need to track this message for later
-                    {
-                        _sentMessages.Add(message);
-                    }
 
                     currentPacketSize += 4 + 1 + contentSize; //messageID + messageType + content
                 }
@@ -287,7 +312,7 @@ namespace ChaseNet2.Transport
                 cs.FlushFinalBlock();
                 ms.Flush();
                 // send the packet
-                _manager.SendPacket(ms.ToArray(), RemoteEndpoint);
+                _manager.SendPacket(ms.ToArray(), RemoteEndpoint, ConnectionId);
             }
         }
     }

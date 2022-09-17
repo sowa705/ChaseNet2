@@ -5,7 +5,7 @@ namespace ChaseNet2.Transport.Messages
 {
     public class Ack:IStreamSerializable
     {
-        public long MessageID { get; set; }
+        public ulong MessageID { get; set; }
         public int Serialize(BinaryWriter writer)
         {
             writer.Write(MessageID);
@@ -14,7 +14,7 @@ namespace ChaseNet2.Transport.Messages
 
         public void Deserialize(BinaryReader reader)
         {
-            MessageID=reader.ReadInt32();
+            MessageID = reader.ReadUInt64();
         }
     }
 }

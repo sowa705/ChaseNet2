@@ -14,6 +14,12 @@ namespace ChaseNet2.Serialization
     {
         public Dictionary<ulong, Type> TypeIDs= new Dictionary<ulong, Type>();
         
+        /// <summary>
+        /// Copies the data to an array when writing to ensure the length is correct.
+        /// This is a bit slower but provides useful information for debugging
+        /// </summary>
+        public bool CopyMode = true;
+        
         public ulong RegisterType(Type type, bool useFullName=true)
         {
             if (!typeof(IStreamSerializable).IsAssignableFrom(type))
@@ -29,7 +35,7 @@ namespace ChaseNet2.Serialization
             var bytes=SHA1.Create().ComputeHash(Encoding.UTF8.GetBytes(name));
             
             var id=BitConverter.ToUInt64(bytes, 0); // first 8 bytes of sha1 hash, should be unique enough
-            Console.WriteLine("Registering type {0} with ID {1}", name, id);
+           // Console.WriteLine("Registering type {0} with ID {1}", name, id);
             
             TypeIDs.Add(id, type);
             return id;
@@ -62,7 +68,25 @@ namespace ChaseNet2.Serialization
             // write type ID
             writer.Write(BitConverter.GetBytes(id));
             // write data
-            return (obj as IStreamSerializable).Serialize(writer)+8; //message+8 bytes for type ID
+            if (CopyMode)
+            {
+                using var ms = new MemoryStream();
+                using var bw = new BinaryWriter(ms);
+                var writtenBytes = ((IStreamSerializable)obj).Serialize(bw);
+                
+                var data = ms.ToArray();
+                writer.Write(data.Length);
+                writer.Write(data);
+
+                if (writtenBytes!= data.Length)
+                {
+                    throw new Exception("Written byte count does not match actual length for type " + type.FullName);
+                }
+                
+                return data.Length + sizeof(ulong) + sizeof(int);
+            }
+
+            return (obj as IStreamSerializable).Serialize(writer)+sizeof(ulong); //message+8 bytes for type ID
         }
         
         public object Deserialize(BinaryReader reader)
@@ -72,19 +96,35 @@ namespace ChaseNet2.Serialization
             var type = TypeIDs[id];
             // read data
             var obj = Activator.CreateInstance(type);
+            
+            if (CopyMode)
+            {
+                var length = reader.ReadInt32();
+                var data = reader.ReadBytes(length);
+                
+                using var ms = new MemoryStream(data);
+                using var br = new BinaryReader(ms);
+
+                try
+                {
+                    ((IStreamSerializable)obj).Deserialize(br);
+                }
+                catch (Exception e)
+                {
+                    Console.WriteLine("Error deserializing type {0} with ID {1} because of {2}", type.FullName, id, e.Message);
+                    throw;
+                }
+                
+                return obj;
+            }
+            
             (obj as IStreamSerializable).Deserialize(reader);
             return obj;
         }
         
         public T Deserialize<T>(BinaryReader reader) where T : class
         {
-            // read type ID
-            var id=BitConverter.ToUInt64(reader.ReadBytes(8), 0);
-            var type = TypeIDs[id];
-            // read data
-            var obj = Activator.CreateInstance(type);
-            (obj as IStreamSerializable).Deserialize(reader);
-            return (obj as T);
+            return Deserialize(reader) as T;
         }
     }
 }

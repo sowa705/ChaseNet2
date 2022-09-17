@@ -8,9 +8,11 @@ namespace ChaseNet2.Transport
     public class ConnectionTarget : IStreamSerializable
     {
         public ECDiffieHellmanPublicKey PublicKey { get; set; }
+        public ulong ConnectionID { get; set; }
         public IPEndPoint EndPoint { get; set; }
         public int Serialize(BinaryWriter writer)
         {
+            writer.Write(ConnectionID);
             var pkbytes = PublicKey.ToByteArray();
             writer.Write(pkbytes.Length);
             writer.Write(pkbytes);
@@ -26,6 +28,7 @@ namespace ChaseNet2.Transport
 
         public void Deserialize(BinaryReader reader)
         {
+            ConnectionID = reader.ReadUInt64();
             var pklen = reader.ReadInt32();
             var pkbytes = reader.ReadBytes(pklen);
             //PublicKey = ECDiffieHellmanCngPublicKey.FromByteArray(pkbytes, CngKeyBlobFormat.EccPublicBlob);

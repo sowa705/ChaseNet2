@@ -2,9 +2,12 @@
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using System.Net;
 using System.Net.Sockets;
 using System.Security.Cryptography;
+using System.Threading;
+using System.Threading.Tasks;
 using ChaseNet2.Serialization;
 using ChaseNet2.Transport.Messages;
 
@@ -17,13 +20,19 @@ namespace ChaseNet2.Transport
         public ECDiffieHellmanPublicKey PublicKey { get => _ecdh.PublicKey; }
         private UdpClient _client;
         public List<Connection> Connections { get; private set; }
+        
+        public List<ConnectionHandler> Handlers { get; private set; }
 
         private Random rng;
         public bool AcceptNewConnections { get; set; }
         public NetworkStatistics Statistics { get; private set; }
         public SerializationManager Serializer { get; private set; }
         
-        public EventHandler<Connection> OnConnectionEstablished;
+        /// <summary>
+        /// The rate at which background thread will update connections in updates per second.
+        /// For servers it is re
+        /// </summary>
+        public float TargetUpdateRate { get; set; } = 20;
 
         public ConnectionManager(int? port = null)
         {
@@ -32,32 +41,79 @@ namespace ChaseNet2.Transport
             _client = port == null ? new UdpClient() : new UdpClient(port.Value);
 
             Connections = new List<Connection>();
+            Handlers = new List<ConnectionHandler>();
 
             Statistics = new NetworkStatistics();
             Serializer = new SerializationManager();
             Serializer.RegisterChaseNetTypes();
             
-            OnConnectionEstablished += (sender, connection) => { }; // default empty handler
-            
             rng = new Random();
         }
-
-        public Connection CreateConnection(ConnectionTarget target)
+        public Connection AttachConnection(ConnectionTarget target)
         {
             var c = new Connection(this, target);
             Connections.Add(c);
 
             Statistics.ConnectionCount = Connections.Count;
-            
-            OnConnectionEstablished(this, c);
+
+            foreach (var h in Handlers)
+            {
+                h.OnManagerConnect(c);
+            }
 
             return c;
         }
+        public Connection CreateConnection(IPEndPoint endPoint, ECDiffieHellmanPublicKey publicKey)
+        {
+            var bytes= new byte[8];
+            rng.NextBytes(bytes);
+            var id = BitConverter.ToUInt64(bytes, 0);
+            
+            var c = new Connection(this, new ConnectionTarget() { EndPoint = endPoint, PublicKey = publicKey, ConnectionID = id });
+            Connections.Add(c);
 
-        public void Update()
+            Statistics.ConnectionCount = Connections.Count;
+            
+            Console.WriteLine($"Created connection to {endPoint} with id {id}");
+
+            return c;
+        }
+        public void StartBackgroundThread()
+        {
+            var t = new Thread(BackgroundThread);
+            t.Start();
+        }
+        
+        public void AttachHandler(ConnectionHandler connectionHandler)
+        {
+            Handlers.Add(connectionHandler);
+        }
+        
+        public void DetachHandler(ConnectionHandler connectionHandler)
+        {
+            Handlers.Remove(connectionHandler);
+        }
+        
+        async void BackgroundThread()
+        {
+            while (true)
+            {
+                var updateTime = await Update();
+
+                var sleepTime = TimeSpan.FromMilliseconds(1f / TargetUpdateRate);
+
+                if (updateTime < sleepTime)
+                {
+                    sleepTime -= updateTime;
+                }
+                
+                await Task.Delay(sleepTime);
+            }
+        }
+
+        public async Task<TimeSpan> Update()
         {
             Stopwatch stopwatch= new Stopwatch();
-            
             stopwatch.Start();
             
             while (_client.Available>0)
@@ -65,14 +121,23 @@ namespace ChaseNet2.Transport
                 ProcessIncomingPacket();
             }
             
-            foreach (var c in Connections)
+            // update all connections on async worker threads
+
+            await Task.WhenAll(Connections.Select(x => Task.Run( x.Update )));
+
+            foreach (var handler in Handlers)
             {
-                c.Update();
+                foreach (var connection in Connections.Where(x=>handler.ShouldHandle(x.ConnectionId)))
+                {
+                    handler.ConnectionUpdate(connection);
+                }
             }
             
             stopwatch.Stop();
 
             Statistics.AverageUpdateTime = (Statistics.AverageUpdateTime+stopwatch.Elapsed)/2;
+            
+            return stopwatch.Elapsed;
         }
 
         void ProcessIncomingPacket()
@@ -80,33 +145,29 @@ namespace ChaseNet2.Transport
             var remoteEP = new IPEndPoint(IPAddress.Any, 0);
             var data = _client.Receive(ref remoteEP);
             
+            var targetConnection = BitConverter.ToUInt64(data, 0);
+            
             Statistics.BytesReceived += data.Length;
             Statistics.PacketsReceived ++;
                 
-            var c = Connections.Find(x => x.RemoteEndpoint.Equals(remoteEP));
-            using var ms = new MemoryStream(data);
+            var c = Connections.Find(x => x.ConnectionId == targetConnection);
             
-            if (c==null)
+            using var ms = new MemoryStream(data, 8, data.Length - 8); // skip first 8 bytes
+            
+            if (targetConnection==0xADDDDDD)
             {
-                Console.WriteLine("Received packet from an unrecognized endpoint");
+                Console.WriteLine($"Received connection request from {remoteEP}");
 
                 if (AcceptNewConnections)
                 {
                     BinaryReader reader = new BinaryReader(ms);
-                    var messageType = reader.ReadInt32();
-
-                    if (messageType!=0xADDDDDD) //connection request magic number
-                    {
-                        Console.WriteLine("Received packet from an unrecognized endpoint, but it wasn't a connect message");
-                        return;
-                    }
                     
                     try
                     {
                         ConnectionRequest request = Serializer.Deserialize<ConnectionRequest>(reader);
-                        
-                        CreateConnection(new ConnectionTarget() {EndPoint = remoteEP, PublicKey = request.PublicKey});
-                        Console.WriteLine("Client connected");
+                        Console.WriteLine("Client connected with id: " + request.ConnectionId);
+
+                        AttachConnection(new ConnectionTarget() {EndPoint = remoteEP, PublicKey = request.PublicKey, ConnectionID = request.ConnectionId});
                     }
                     catch
                     {
@@ -119,9 +180,9 @@ namespace ChaseNet2.Transport
             c.ReadInputStream(ms);
         }
         
-        public byte[] ComputeSharedSecretKey(ECDiffieHellmanPublicKey remotePublicKey)
+        public byte[] ComputeSharedSecretKey(ECDiffieHellmanPublicKey remotePublicKey, ulong connectionID)
         {
-            return _ecdh.DeriveKeyFromHash(remotePublicKey,HashAlgorithmName.SHA256);
+            return _ecdh.DeriveKeyFromHash(remotePublicKey, HashAlgorithmName.SHA256, BitConverter.GetBytes(connectionID),null);
         }
         
         public Aes CreateAes(byte[] key,byte[] iv)
@@ -141,12 +202,16 @@ namespace ChaseNet2.Transport
             return iv;
         }
 
-        public void SendPacket(byte[] array, IPEndPoint remoteEndpoint)
+        public void SendPacket(byte[] array, IPEndPoint remoteEndpoint, ulong connectionId)
         {
-            _client.Send(array, array.Length, remoteEndpoint);
+            var data = new byte[array.Length + 8];
+            BitConverter.GetBytes(connectionId).CopyTo(data, 0);
+            array.CopyTo(data, 8);
             
-            Statistics.PacketsSent++;
-            Statistics.BytesSent += array.Length;
+            _client.Send(data, data.Length, remoteEndpoint);
+            
+            Statistics.BytesSent += data.Length;
+            Statistics.PacketsSent ++;
         }
     }
 }

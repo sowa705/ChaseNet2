@@ -1,4 +1,5 @@
 using System;
+using System.Threading.Tasks;
 using ChaseNet2.Session.Messages;
 using ChaseNet2.Transport;
 
@@ -17,21 +18,6 @@ namespace ChaseNet2.Session
 
         public void Update()
         {
-            if (State==TrackerConnectionState.ReceivedJoinRequest)
-            {
-                HandleNewConnection();
-                return;
-            }
-
-            if (State==TrackerConnectionState.SentJoinResponse)
-            {
-                if (_joinSessionResponse.State==MessageState.Delivered)
-                {
-                    State = TrackerConnectionState.Connected;
-                    Console.WriteLine($"Connection {Connection.PeerPublicKey} joined session {SessionTracker.SessionName}");
-                }
-            }
-
             if (State==TrackerConnectionState.Connected)
             {
                 if (_lastSessionUpdate+TimeSpan.FromSeconds(1)<DateTime.UtcNow) // send session update every second
@@ -51,7 +37,7 @@ namespace ChaseNet2.Session
                     
                     // send the update to the connection
                     
-                    _sessionUpdateMessage = Connection.EnqueueMessage(MessageType.Reliable, sessionUpdate);
+                    _sessionUpdateMessage = Connection.EnqueueMessage(MessageType.Reliable, (ulong) InternalChannelType.SessionUpdate, sessionUpdate);
                 }
 
                 if (Connection.State==ConnectionState.Disconnected)
@@ -61,31 +47,25 @@ namespace ChaseNet2.Session
             }
         }
 
-        private void HandleNewConnection()
+        public async Task HandleNewConnection()
         {
-            NetworkMessage message;
+            var message=await Connection.WaitForChannelMessageAsync((ulong)InternalChannelType.SessionJoin, TimeSpan.FromSeconds(5));
+            
+            var joinRequest = message.Content as JoinSession;
 
-            while (Connection.IncomingMessages.TryDequeue(out message))
+            if (joinRequest.SessionName!=SessionTracker.SessionName)
             {
-                if (message.Content is JoinSession)
-                {
-                    var request = (JoinSession)message.Content;
-                    if (request.SessionName.Equals(SessionTracker.SessionName))
-                    {
-                        _joinSessionResponse =
-                            Connection.EnqueueMessage(MessageType.Reliable, new JoinSessionResponse() { Accepted = true });
-                        State = TrackerConnectionState.SentJoinResponse;
-                        Console.WriteLine($"Connection {Connection.PeerPublicKey} requested to join session {SessionTracker.SessionName}");
-                    }
-                    else //client probably wants to connect to another tracker session
-                    {
-                        SessionTracker.RemoveConnection(this);
-                        return;
-                    }
-                }
+                throw new Exception("Client tried to join wrong session");
             }
+            
+            // send join response
+            JoinSessionResponse joinResponse = new JoinSessionResponse();
+            joinResponse.Accepted = true;
+            
+            _joinSessionResponse = Connection.EnqueueMessage(MessageType.Reliable, (ulong) InternalChannelType.SessionJoin, joinResponse);
+            await Connection.WaitForDeliveryAsync(_joinSessionResponse);
+            throw new Exception("Client tried to join wrong session");
 
-            return;
         }
     }
 }
