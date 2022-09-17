@@ -32,7 +32,7 @@ namespace ChaseNet2.Transport
         /// The rate at which background thread will update connections in updates per second.
         /// For servers it is re
         /// </summary>
-        public float TargetUpdateRate { get; set; } = 20;
+        public float TargetUpdateRate { get; set; } = 30;
 
         public ConnectionManager(int? port = null)
         {
@@ -80,8 +80,7 @@ namespace ChaseNet2.Transport
         }
         public void StartBackgroundThread()
         {
-            var t = new Thread(BackgroundThread);
-            t.Start();
+            Task.Run(BackgroundThread);
         }
         
         public void AttachHandler(ConnectionHandler connectionHandler)
@@ -94,13 +93,13 @@ namespace ChaseNet2.Transport
             Handlers.Remove(connectionHandler);
         }
         
-        async void BackgroundThread()
+        async Task BackgroundThread()
         {
             while (true)
             {
                 var updateTime = await Update();
 
-                var sleepTime = TimeSpan.FromMilliseconds(1f / TargetUpdateRate);
+                var sleepTime = TimeSpan.FromSeconds(1f / TargetUpdateRate);
 
                 if (updateTime < sleepTime)
                 {

@@ -12,7 +12,7 @@ namespace ChaseNet2.Serialization
 {
     public class SerializationManager
     {
-        public Dictionary<ulong, Type> TypeIDs= new Dictionary<ulong, Type>();
+        Dictionary<ulong, Type> TypeIDs = new Dictionary<ulong, Type>();
         
         /// <summary>
         /// Copies the data to an array when writing to ensure the length is correct.
@@ -86,7 +86,7 @@ namespace ChaseNet2.Serialization
                 return data.Length + sizeof(ulong) + sizeof(int);
             }
 
-            return (obj as IStreamSerializable).Serialize(writer)+sizeof(ulong); //message+8 bytes for type ID
+            return (obj as IStreamSerializable)!.Serialize(writer)+sizeof(ulong); //message+8 bytes for type ID
         }
         
         public object Deserialize(BinaryReader reader)
@@ -118,7 +118,7 @@ namespace ChaseNet2.Serialization
                 return obj;
             }
             
-            (obj as IStreamSerializable).Deserialize(reader);
+            (obj as IStreamSerializable)!.Deserialize(reader);
             return obj;
         }
         

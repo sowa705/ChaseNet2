@@ -17,7 +17,7 @@ host.StartBackgroundThread();
 
 List<(ConnectionManager,SessionClient)> clients = new List<(ConnectionManager,SessionClient)>();
 
-for (int i = 0; i < 1; i++)
+for (int i = 0; i < 1000; i++)
 {
     ConnectionManager client = new ConnectionManager();
     var connection = client.CreateConnection(IPEndPoint.Parse("127.0.0.1:5000"), host.PublicKey);
@@ -30,6 +30,8 @@ for (int i = 0; i < 1; i++)
     
     SessionClient sessionClient2 = new SessionClient("MySession2",connection2);
     client.AttachHandler(sessionClient2);
+    
+    client.StartBackgroundThread();
 }
 
 
@@ -43,13 +45,11 @@ while (true)
     if (counter%50==0)
     {
         Console.WriteLine($"Host statistics: {host.Statistics}");
+        
+        foreach (var client in clients)
+        {
+            //Console.WriteLine($"Client statistics: {client.Item1.Statistics}");
+        }
     }
     await Task.Delay(16);
-    await Task.WhenAll(clients.Select(x=>Task.Run(
-        async () =>
-        {
-            await x.Item1.Update(); 
-            
-        })).ToArray());
-
 }
