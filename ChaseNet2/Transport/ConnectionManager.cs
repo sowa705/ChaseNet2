@@ -10,6 +10,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using ChaseNet2.Serialization;
 using ChaseNet2.Transport.Messages;
+using Serilog;
 
 namespace ChaseNet2.Transport
 {
@@ -27,7 +28,7 @@ namespace ChaseNet2.Transport
         public bool AcceptNewConnections { get; set; }
         public NetworkStatistics Statistics { get; private set; }
         public SerializationManager Serializer { get; private set; }
-        
+
         /// <summary>
         /// The rate at which background thread will update connections in updates per second.
         /// For servers it is re
@@ -73,8 +74,8 @@ namespace ChaseNet2.Transport
             Connections.Add(c);
 
             Statistics.ConnectionCount = Connections.Count;
-            
-            Console.WriteLine($"Created connection to {endPoint} with id {id}");
+
+            Log.Logger.Information($"Created connection to {0} with id {1}", endPoint, id);
 
             return c;
         }
@@ -153,9 +154,9 @@ namespace ChaseNet2.Transport
             
             using var ms = new MemoryStream(data, 8, data.Length - 8); // skip first 8 bytes
             
-            if (targetConnection==0xADDDDDD)
+            if (targetConnection==0xADDDDDDDD)
             {
-                Console.WriteLine($"Received connection request from {remoteEP}");
+                Log.Logger.Information("Received connection request from {EndPoint}", remoteEP);
 
                 if (AcceptNewConnections)
                 {
@@ -164,18 +165,27 @@ namespace ChaseNet2.Transport
                     try
                     {
                         ConnectionRequest request = Serializer.Deserialize<ConnectionRequest>(reader);
-                        Console.WriteLine("Client connected with id: " + request.ConnectionId);
+
+                        if (Connections.Find(x => x.ConnectionId == request.ConnectionId) !=null)
+                        {
+                            return;
+                        }
+                        
+                        Log.Logger.Information("Attached a new connection from {EndPoint} with id {ConnectionId}", remoteEP, request.ConnectionId);
 
                         AttachConnection(new ConnectionTarget() {EndPoint = remoteEP, PublicKey = request.PublicKey, ConnectionID = request.ConnectionId});
                     }
                     catch
                     {
-                        Console.WriteLine("Client tried to connect with an invalid key");
+                        Log.Logger.Warning("Failed to deserialize connection request from {EndPoint}", remoteEP);
                     }
                 }
                 return;
             }
-            
+            if (c is null)
+            {
+                return;
+            }
             c.ReadInputStream(ms);
         }
         

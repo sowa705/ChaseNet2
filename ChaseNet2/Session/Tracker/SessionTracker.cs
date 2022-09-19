@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using ChaseNet2.Transport;
 using ChaseNet2.Transport.Messages;
+using Serilog;
 
 namespace ChaseNet2.Session
 {
@@ -27,7 +28,7 @@ namespace ChaseNet2.Session
 
         public override void OnManagerConnect(Connection connection)
         {
-            Console.WriteLine("New connection established");
+            Log.Logger.Information("New connection established");
             var c = new TrackerConnection() { Connection = connection, SessionTracker = this };
             Connections.Add(c);
             c.HandleNewConnection();

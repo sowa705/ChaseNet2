@@ -7,6 +7,7 @@ using System.Net;
 using System.Security.Cryptography;
 using System.Threading.Tasks;
 using ChaseNet2.Transport.Messages;
+using Serilog;
 
 namespace ChaseNet2.Transport
 {
@@ -38,7 +39,8 @@ namespace ChaseNet2.Transport
         public float AveragePing { get; private set; }
         
         public DateTime LastConnectionAttempt { get; private set; }
-        
+        int ConnectionRetryCount;
+
         public Dictionary<ulong,IMessageHandler> MessageHandlers { get; private set; }
 
         public Connection(ConnectionManager manager,ConnectionTarget target)
@@ -136,7 +138,7 @@ namespace ChaseNet2.Transport
             
             _manager.Serializer.Serialize(request,writer);
 
-            _manager.SendPacket(((MemoryStream)writer.BaseStream).ToArray(), RemoteEndpoint, 0xADDDDDD);
+            _manager.SendPacket(((MemoryStream)writer.BaseStream).ToArray(), RemoteEndpoint, 0xADDDDDDDD);
         }
         
         public void ReadInputStream(Stream stream)
@@ -164,13 +166,13 @@ namespace ChaseNet2.Transport
                 var preamble = reader.ReadInt32();
                 if (preamble != 0x12345678)
                 {
-                    Console.WriteLine("Invalid packet preamble");
+                    Log.Logger.Warning("Received an invalid packet preamble");
                     return;
                 }
             }
             catch
             {
-                Console.WriteLine("Invalid packet");
+                Log.Logger.Warning("Received an invalid packet");
                 return;
             }
             
@@ -214,8 +216,15 @@ namespace ChaseNet2.Transport
             if (State == ConnectionState.Started&& LastConnectionAttempt.AddSeconds(3) < DateTime.UtcNow)
             {
                 LastConnectionAttempt = DateTime.UtcNow;
+                ConnectionRetryCount++;
+                if (ConnectionRetryCount > 5)
+                {
+                    State = ConnectionState.Disabled;
+                    Log.Logger.Error("Failed to connect to peer");
+                    return;
+                }
                 CreateConnectMessage();
-                Console.WriteLine("Retrying connection");
+                Log.Logger.Warning("Retrying sending connection request to {0}", RemoteEndpoint);
             }
             if (LastPing+TimeSpan.FromSeconds(2)<DateTime.UtcNow)
             {
@@ -227,7 +236,7 @@ namespace ChaseNet2.Transport
 
             if (LastReceivedPong+TimeSpan.FromSeconds(5)<DateTime.UtcNow&&State!=ConnectionState.Started)
             {
-                Console.WriteLine("Disconnecting due to timeout");
+                //Log.Logger.Warning("Lost connection {0}, trying to reconnect", ConnectionId);
                 State = ConnectionState.Disconnected; // we haven't received a pong in 5 seconds so we are probably disconnected
             }
             

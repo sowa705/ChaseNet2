@@ -4,6 +4,7 @@
     {
         Started,
         Connected,
-        Disconnected
+        Disconnected,
+        Disabled
     }
 }
