@@ -7,4 +7,9 @@ Peer to peer networking library written in pure C#
 * Full encryption between peers
 * Powerful serialization system
 * Data compression
-* Designed for minimal GC use
+
+## TODO
+
+* Make it work lol
+* Tracker code
+* External key exchange
