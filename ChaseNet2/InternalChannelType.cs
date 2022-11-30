@@ -6,6 +6,6 @@ namespace ChaseNet2
         ConnectionCreate = 102,
         
         SessionJoin = 201,
-        SessionUpdate = 202,
+        TrackerInternal = 202,
     }
 }

@@ -31,7 +31,7 @@ namespace ChaseNet2.Transport
 
         /// <summary>
         /// The rate at which background thread will update connections in updates per second.
-        /// For servers it is re
+        /// Recommended value on tracker servers is 20, clients can use 60-120.
         /// </summary>
         public float TargetUpdateRate { get; set; } = 30;
 
@@ -75,13 +75,16 @@ namespace ChaseNet2.Transport
 
             Statistics.ConnectionCount = Connections.Count;
 
-            Log.Logger.Information($"Created connection to {0} with id {1}", endPoint, id);
+            Log.Logger.Information("Created connection to {0} with id {1}", endPoint, id);
 
             return c;
         }
         public void StartBackgroundThread()
         {
-            Task.Run(BackgroundThread);
+            Task.Run(BackgroundThread).ContinueWith((t) =>
+            {
+                Log.Logger.Error("Background thread crashed: {0}", t.Exception);
+            });
         }
         
         public void AttachHandler(ConnectionHandler connectionHandler)
@@ -136,7 +139,11 @@ namespace ChaseNet2.Transport
             stopwatch.Stop();
 
             Statistics.AverageUpdateTime = (Statistics.AverageUpdateTime+stopwatch.Elapsed)/2;
-            
+            if (Connections.Count>0)
+            {
+                Statistics.AveragePing = Connections.Average(x => x.AveragePing);
+            }
+
             return stopwatch.Elapsed;
         }
 
@@ -166,14 +173,14 @@ namespace ChaseNet2.Transport
                     {
                         ConnectionRequest request = Serializer.Deserialize<ConnectionRequest>(reader);
 
-                        if (Connections.Find(x => x.ConnectionId == request.ConnectionId) !=null)
+                        if (Connections.Find(x => x.ConnectionId == request.ConnectionId) != null)
                         {
                             return;
                         }
                         
-                        Log.Logger.Information("Attached a new connection from {EndPoint} with id {ConnectionId}", remoteEP, request.ConnectionId);
-
                         AttachConnection(new ConnectionTarget() {EndPoint = remoteEP, PublicKey = request.PublicKey, ConnectionID = request.ConnectionId});
+
+                        Log.Logger.Information("Attached a new connection from {EndPoint} with id {ConnectionId}", remoteEP, request.ConnectionId);
                     }
                     catch
                     {

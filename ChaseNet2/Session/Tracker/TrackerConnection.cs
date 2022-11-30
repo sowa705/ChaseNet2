@@ -2,6 +2,7 @@ using System;
 using System.Threading.Tasks;
 using ChaseNet2.Session.Messages;
 using ChaseNet2.Transport;
+using Serilog;
 
 namespace ChaseNet2.Session
 {
@@ -37,7 +38,7 @@ namespace ChaseNet2.Session
                     
                     // send the update to the connection
                     
-                    _sessionUpdateMessage = Connection.EnqueueMessage(MessageType.Reliable, (ulong) InternalChannelType.SessionUpdate, sessionUpdate);
+                    _sessionUpdateMessage = Connection.EnqueueMessage(MessageType.Reliable, (ulong) InternalChannelType.TrackerInternal, sessionUpdate);
                 }
 
                 if (Connection.State==ConnectionState.Disconnected)
@@ -49,8 +50,10 @@ namespace ChaseNet2.Session
 
         public async Task HandleNewConnection()
         {
+            Log.Information("New connection from {remote}", Connection.RemoteEndpoint);
             var message=await Connection.WaitForChannelMessageAsync((ulong)InternalChannelType.SessionJoin, TimeSpan.FromSeconds(5));
-            
+            Log.Warning("Receiveld");
+
             var joinRequest = message.Content as JoinSession;
 
             if (joinRequest.SessionName!=SessionTracker.SessionName)
@@ -64,8 +67,8 @@ namespace ChaseNet2.Session
             
             _joinSessionResponse = Connection.EnqueueMessage(MessageType.Reliable, (ulong) InternalChannelType.SessionJoin, joinResponse);
             await Connection.WaitForDeliveryAsync(_joinSessionResponse);
-            throw new Exception("Client tried to join wrong session");
-
+            State = TrackerConnectionState.Connected;
+            Log.Logger.Information("Connection {0} joined session {1}", Connection.ConnectionId, SessionTracker.SessionName);
         }
     }
 }

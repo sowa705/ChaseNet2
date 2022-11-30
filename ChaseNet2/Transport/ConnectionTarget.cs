@@ -23,7 +23,7 @@ namespace ChaseNet2.Transport
             writer.Write(address);
             writer.Write(EndPoint.Port);
             
-            return 4 + pkbytes.Length + 4 + address.Length + 4;
+            return 8 + 4 + pkbytes.Length + 4 + address.Length + 4;
         }
 
         public void Deserialize(BinaryReader reader)
@@ -31,7 +31,7 @@ namespace ChaseNet2.Transport
             ConnectionID = reader.ReadUInt64();
             var pklen = reader.ReadInt32();
             var pkbytes = reader.ReadBytes(pklen);
-            //PublicKey = ECDiffieHellmanCngPublicKey.FromByteArray(pkbytes, CngKeyBlobFormat.EccPublicBlob);
+            PublicKey = ECDiffieHellmanCngPublicKey.FromByteArray(pkbytes, CngKeyBlobFormat.EccPublicBlob);
             
             var addrlen = reader.ReadInt32();
             var addrbytes = reader.ReadBytes(addrlen);

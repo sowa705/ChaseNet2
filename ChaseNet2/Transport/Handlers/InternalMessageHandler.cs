@@ -1,5 +1,7 @@
 using System;
+using System.Threading.Tasks;
 using ChaseNet2.Transport.Messages;
+using Serilog;
 
 namespace ChaseNet2.Transport
 {
@@ -15,8 +17,15 @@ namespace ChaseNet2.Transport
                         var sentMessage = connection._trackedSentMessages.Find(m => m.Message.ID == ack.MessageID);
                         if (sentMessage != null)
                         {
+                            if (sentMessage.Message.State == MessageState.Delivered)
+                            {
+                                return;
+                            }
                             sentMessage.Message.State = MessageState.Delivered;
-                            sentMessage.DeliveryTask?.SetResult(true);
+                            if (sentMessage.DeliveryTask!=null)
+                            {
+                                sentMessage.DeliveryTask.SetResult(true);
+                            }
                         }
                         break;
                     case Ping ping:
@@ -32,7 +41,7 @@ namespace ChaseNet2.Transport
                             // we got a valid pong
                             var pingTime = (DateTime.UtcNow - connection.LastPing)/2; // ping is half of round trip time
                                     
-                            connection.AveragePing = (connection.AveragePing + (float) pingTime.TotalMilliseconds) / 2;
+                            connection.AveragePing = (connection.AveragePing + (float) pingTime.TotalMilliseconds) / 2; // simple moving average
                             connection.LastReceivedPong = DateTime.UtcNow;
                                     
                             //Console.WriteLine($"Ping {connection.AveragePing}");

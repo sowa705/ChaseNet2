@@ -18,6 +18,7 @@ namespace ChaseNet2.Session
             Connections = new List<TrackerConnection>();
             ConnectionManager = connectionManager;
             
+            ConnectionManager.AttachHandler(this);
             connectionManager.AcceptNewConnections = true;
         }
         
@@ -31,6 +32,8 @@ namespace ChaseNet2.Session
             Log.Logger.Information("New connection established");
             var c = new TrackerConnection() { Connection = connection, SessionTracker = this };
             Connections.Add(c);
+            AddConnection(connection.ConnectionId);
+            Log.Logger.Information("Connection added to list");
             c.HandleNewConnection();
         }
 

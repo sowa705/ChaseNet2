@@ -11,6 +11,8 @@ namespace ChaseNet2.Transport
         public TimeSpan AverageUpdateTime { get; set; }
 
         public int ConnectionCount { get; set; }
+        
+        public float AveragePing { get; set; }
 
         public override string ToString()
         {

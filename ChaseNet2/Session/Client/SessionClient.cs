@@ -2,6 +2,8 @@ using System;
 using System.Threading.Tasks;
 using ChaseNet2.Session.Messages;
 using ChaseNet2.Transport;
+using Serilog;
+using Serilog.Core;
 
 namespace ChaseNet2.Session
 {
@@ -12,14 +14,18 @@ namespace ChaseNet2.Session
         
         NetworkMessage _connectMessage;
         public string SessionId { get; private set; }
-        public SessionClient(string sessionName, Connection trackerConnection)
+        public SessionClient(string sessionName, ConnectionManager manager, Connection trackerConnection)
         {
+            manager.AttachHandler(this);
             AddConnection(trackerConnection.ConnectionId);
             _trackerConnection = trackerConnection;
             SessionId = sessionName;
+            
+            _trackerConnection.RegisterMessageHandler((ulong) InternalChannelType.TrackerInternal, new SessionClientMessageHandler());
         }
         public override void OnManagerConnect(Connection connection) // client does not accept incoming connections
         {
+            Log.Logger.Warning("SessionClient.OnManagerConnect() called on client");
         }
 
         public override void ConnectionUpdate(Connection connection)
@@ -52,6 +58,20 @@ namespace ChaseNet2.Session
             else
             {
                 State = SessionClientState.Disconnected;
+            }
+        }
+    }
+    
+    public class SessionClientMessageHandler : IMessageHandler
+    {
+        public void HandleMessage(Connection connection, NetworkMessage message)
+        {
+            Log.Logger.Information("Received message from tracker");
+            switch (message.Content)
+            {
+                case SessionUpdate update:
+                    Log.Logger.Error("Received session update");
+                    break;
             }
         }
     }
