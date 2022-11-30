@@ -14,6 +14,10 @@ namespace ChaseNet2.Transport
             {
                 if (_publicKey == null)
                 {
+                    if (_publicKeyBytes.Length<=1)
+                    {
+                        return null;
+                    }
                     _publicKey = ECDiffieHellmanCngPublicKey.FromByteArray(_publicKeyBytes, CngKeyBlobFormat.EccPublicBlob);
                 }
                 return _publicKey;
@@ -21,7 +25,14 @@ namespace ChaseNet2.Transport
             set
             {
                 _publicKey = value;
-                _publicKeyBytes = _publicKey.ToByteArray();
+                if (_publicKey!=null)
+                {
+                    _publicKeyBytes = _publicKey.ToByteArray();
+                }
+                else
+                {
+                    _publicKeyBytes = new []{ (byte)0 };
+                }
             }
         }
 

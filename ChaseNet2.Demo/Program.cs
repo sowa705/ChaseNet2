@@ -8,7 +8,7 @@ using Serilog.Events;
 using Serilog.Exceptions;
 
 Logger logger = new LoggerConfiguration()
-    //.MinimumLevel.Debug()
+    .MinimumLevel.Debug()
     .WriteTo.Console()
     .CreateLogger();
 
@@ -22,10 +22,10 @@ tracker.SessionName="MySession";
 host.StartBackgroundThread();
 
 
-for (int i = 0; i < 20; i++)
+for (int i = 0; i < 1; i++)
 {
     ConnectionManager client = new ConnectionManager();
-    var connection = client.CreateConnection(IPEndPoint.Parse("127.0.0.1:6000"), host.PublicKey);
+    var connection = client.CreateConnection(IPEndPoint.Parse("127.0.0.1:6000"));
     SessionClient sessionClient = new SessionClient("MySession", client, connection);
     
     client.StartBackgroundThread();

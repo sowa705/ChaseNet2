@@ -75,13 +75,13 @@ namespace ChaseNet2.Transport
             Connections.Remove(c);
             Statistics.ConnectionCount = Connections.Count;
         }
-        public Connection CreateConnection(IPEndPoint endPoint, ECDiffieHellmanPublicKey publicKey)
+        public Connection CreateConnection(IPEndPoint endPoint)
         {
             var bytes= new byte[8];
             rng.NextBytes(bytes);
             var id = BitConverter.ToUInt64(bytes, 0);
             
-            var c = new Connection(this, new ConnectionTarget() { EndPoint = endPoint, PublicKey = publicKey, ConnectionId = id });
+            var c = new Connection(this, new ConnectionTarget() { EndPoint = endPoint, PublicKey = null, ConnectionId = id });
             Connections.Add(c);
 
             Statistics.ConnectionCount = Connections.Count;
@@ -200,8 +200,15 @@ namespace ChaseNet2.Transport
                         {
                             return;
                         }
+
+                        var attachTask = AttachConnectionAsync(new ConnectionTarget()
+                        {
+                            EndPoint = remoteEP, PublicKey = request.PublicKey, ConnectionId = request.ConnectionId
+                        });
+                        attachTask.Wait();
+                        var connection = attachTask.Result;
                         
-                        AttachConnectionAsync(new ConnectionTarget() {EndPoint = remoteEP, PublicKey = request.PublicKey, ConnectionId = request.ConnectionId}).Wait();
+                        connection.SendConnectionResponse();
 
                         Log.Logger.Information("Attached a new connection from {EndPoint} with id {ConnectionId}", remoteEP, request.ConnectionId);
                     }
@@ -212,6 +219,30 @@ namespace ChaseNet2.Transport
                 }
                 return;
             }
+            if (targetConnection==0xBDDDDDDDD) // we got a connection response
+            {
+                Log.Logger.Information("Received connection response from {EndPoint}", remoteEP);
+                // read connection response
+                BinaryReader reader = new BinaryReader(ms);
+                try
+                {
+                    ConnectionResponse response = Serializer.Deserialize<ConnectionResponse>(reader);
+                    if (!response.Accepted)
+                    {
+                        Log.Logger.Warning("Connection request was rejected by {EndPoint} :(", remoteEP);
+                    }
+                    var connection = Connections.Find(x => x.ConnectionId == response.ConnectionId);
+                    connection.SetPeerPublicKey(response.PublicKey);
+                    Log.Logger.Information("Connection {ConnectionID} established with {EndPoint}",response.ConnectionId, remoteEP);
+                }
+                catch (Exception e)
+                {
+                    Console.WriteLine(e);
+                    throw;
+                }
+                return;
+            }
+            
             if (c is null)
             {
                 return;

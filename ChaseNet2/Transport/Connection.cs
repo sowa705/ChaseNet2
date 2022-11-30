@@ -28,6 +28,8 @@ namespace ChaseNet2.Transport
         ConcurrentQueue<NetworkMessage> OutgoingMessages { get; set; }
         
         List<SentMessage> _trackedSentMessages;
+        LinkedList<ulong> _ReceivedMessageIds;
+        
         
         public ulong CurrentMessageId { get; private set; }
 
@@ -52,14 +54,18 @@ namespace ChaseNet2.Transport
             ConnectionId = target.ConnectionId;
             
             _manager = manager;
-            
-            _sharedKey = manager.ComputeSharedSecretKey(PeerPublicKey,ConnectionId);
+
+            if (PeerPublicKey!=null)
+            {
+                SetPeerPublicKey(PeerPublicKey);
+            }
             
             IncomingMessages = new ConcurrentQueue<NetworkMessage>();
             OutgoingMessages = new ConcurrentQueue<NetworkMessage>();
             MessageHandlers = new Dictionary<ulong, IMessageHandler>();
             
             _trackedSentMessages = new List<SentMessage>();
+            _ReceivedMessageIds = new LinkedList<ulong>();
             
             LastPing = DateTime.UtcNow;
             LastReceivedPong = DateTime.UtcNow;
@@ -140,8 +146,29 @@ namespace ChaseNet2.Transport
             _manager.SendPacket(((MemoryStream)writer.BaseStream).ToArray(), RemoteEndpoint, 0xADDDDDDDD);
         }
         
+        public void SendConnectionResponse()
+        {
+            BinaryWriter writer = new BinaryWriter(new MemoryStream());
+
+            ConnectionResponse request = new ConnectionResponse() {PublicKey = _manager.PublicKey, Accepted = true, ConnectionId = ConnectionId};
+            
+            _manager.Serializer.Serialize(request,writer);
+
+            _manager.SendPacket(((MemoryStream)writer.BaseStream).ToArray(), RemoteEndpoint, 0xBDDDDDDDD);
+        }
+        
+        public void SetPeerPublicKey(ECDiffieHellmanPublicKey key)
+        {
+            PeerPublicKey = key;
+            _sharedKey = _manager.ComputeSharedSecretKey(PeerPublicKey,ConnectionId);
+        }
+        
         public void ReadInputStream(Stream stream)
         {
+            if (PeerPublicKey==null)
+            {
+                return;
+            }
             var initializationVector = new byte[16];
             var ivCount = stream.Read(initializationVector, 0, 16); //Read the initialization vector for the packet AES encryption
 
@@ -187,6 +214,14 @@ namespace ChaseNet2.Transport
                     
                     var message = new NetworkMessage(messageID, channelID, messageType, messageContent);
                     message.State = MessageState.Received;
+
+                    if (_ReceivedMessageIds.Contains(messageID))
+                    {
+                        Log.Logger.Warning("Received a duplicate message {messageID}",messageID);
+                        continue;
+                    }
+                    
+                    _ReceivedMessageIds.AddLast(messageID);
                     
                     Log.Logger.Debug("Received message {MessageID} on channel {ChannelID} of type {MessageType} with content {Content}",messageID,channelID,messageType,messageContent.GetType());
                     
@@ -252,11 +287,18 @@ namespace ChaseNet2.Transport
                         msg.DeliveryTask?.SetResult(false);
                         continue;
                     }
+                    Log.Warning("Resending message {MessageID}",msg.Message.ID);
                     // resend the message
                     msg.LastSent=DateTime.UtcNow;
                     msg.ResendCount++;
                     OutgoingMessages.Enqueue(msg.Message);
                 }
+            }
+            
+            // clean up old message ids
+            while (_ReceivedMessageIds.Count>200)
+            {
+                _ReceivedMessageIds.RemoveFirst();
             }
             
             // remove messages that have been delivered or failed
@@ -284,6 +326,10 @@ namespace ChaseNet2.Transport
         {
             while (!OutgoingMessages.IsEmpty)
             {
+                if (PeerPublicKey==null)
+                {
+                    return;
+                }
                 // prepare the packet
                 var iv = _manager.GenerateInitializationVector();
                 
