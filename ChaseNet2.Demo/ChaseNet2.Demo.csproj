@@ -11,4 +11,8 @@
       <ProjectReference Include="..\ChaseNet2\ChaseNet2.csproj" />
     </ItemGroup>
 
+    <ItemGroup>
+      <PackageReference Include="Serilog.Exceptions" Version="8.4.0" />
+    </ItemGroup>
+
 </Project>

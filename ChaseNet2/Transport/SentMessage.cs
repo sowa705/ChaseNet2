@@ -15,6 +15,7 @@ namespace ChaseNet2.Transport
         {
             Message = message;
             ResendCount = 0;
+            LastSent = DateTime.UtcNow;
         }
     }
 }

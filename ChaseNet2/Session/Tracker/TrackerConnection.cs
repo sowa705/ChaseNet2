@@ -2,6 +2,7 @@ using System;
 using System.Threading.Tasks;
 using ChaseNet2.Session.Messages;
 using ChaseNet2.Transport;
+using Serilog;
 
 namespace ChaseNet2.Session
 {
@@ -20,7 +21,7 @@ namespace ChaseNet2.Session
         {
             if (State==TrackerConnectionState.Connected)
             {
-                if (_lastSessionUpdate+TimeSpan.FromSeconds(1)<DateTime.UtcNow) // send session update every second
+                if (_lastSessionUpdate+TimeSpan.FromSeconds(3)<DateTime.UtcNow) // send session update every second
                 {
                     _lastSessionUpdate = DateTime.UtcNow;
                     
@@ -30,6 +31,9 @@ namespace ChaseNet2.Session
                     {
                         sessionUpdate.Peers.Add(new ConnectionTarget()
                         {
+                            // we compute a somewhat unique id for each connection
+                            // this is used to identify the connection on the other side and must be the same for both peers
+                            ConnectionId = con.Connection.ConnectionId^Connection.ConnectionId,
                             EndPoint = con.Connection.RemoteEndpoint,
                             PublicKey = con.Connection.PeerPublicKey
                         });
@@ -37,7 +41,7 @@ namespace ChaseNet2.Session
                     
                     // send the update to the connection
                     
-                    _sessionUpdateMessage = Connection.EnqueueMessage(MessageType.Reliable, (ulong) InternalChannelType.SessionUpdate, sessionUpdate);
+                    _sessionUpdateMessage = Connection.EnqueueMessage(MessageType.Reliable, (ulong) InternalChannelType.TrackerInternal, sessionUpdate);
                 }
 
                 if (Connection.State==ConnectionState.Disconnected)
@@ -49,8 +53,9 @@ namespace ChaseNet2.Session
 
         public async Task HandleNewConnection()
         {
+            Log.Information("New connection from {remote}", Connection.RemoteEndpoint);
             var message=await Connection.WaitForChannelMessageAsync((ulong)InternalChannelType.SessionJoin, TimeSpan.FromSeconds(5));
-            
+
             var joinRequest = message.Content as JoinSession;
 
             if (joinRequest.SessionName!=SessionTracker.SessionName)
@@ -64,8 +69,8 @@ namespace ChaseNet2.Session
             
             _joinSessionResponse = Connection.EnqueueMessage(MessageType.Reliable, (ulong) InternalChannelType.SessionJoin, joinResponse);
             await Connection.WaitForDeliveryAsync(_joinSessionResponse);
-            throw new Exception("Client tried to join wrong session");
-
+            State = TrackerConnectionState.Connected;
+            Log.Logger.Information("Connection {0} joined session {1}", Connection.ConnectionId, SessionTracker.SessionName);
         }
     }
 }

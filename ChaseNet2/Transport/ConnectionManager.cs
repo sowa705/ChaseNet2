@@ -31,9 +31,14 @@ namespace ChaseNet2.Transport
 
         /// <summary>
         /// The rate at which background thread will update connections in updates per second.
-        /// For servers it is re
+        /// Recommended value on tracker servers is 20, clients can use 60-120.
         /// </summary>
         public float TargetUpdateRate { get; set; } = 30;
+
+        int tickCount = 0;
+        
+        long lastSentBytes = 0;
+        long lastReceivedBytes = 0;
 
         public ConnectionManager(int? port = null)
         {
@@ -50,7 +55,7 @@ namespace ChaseNet2.Transport
             
             rng = new Random();
         }
-        public Connection AttachConnection(ConnectionTarget target)
+        public async Task<Connection> AttachConnectionAsync(ConnectionTarget target)
         {
             var c = new Connection(this, target);
             Connections.Add(c);
@@ -59,10 +64,16 @@ namespace ChaseNet2.Transport
 
             foreach (var h in Handlers)
             {
-                h.OnManagerConnect(c);
+                await h.OnManagerConnect(c);
             }
 
             return c;
+        }
+        public void RemoveConnection(ulong connectionId)
+        {
+            var c = Connections.Find(c => c.ConnectionId == connectionId);
+            Connections.Remove(c);
+            Statistics.ConnectionCount = Connections.Count;
         }
         public Connection CreateConnection(IPEndPoint endPoint, ECDiffieHellmanPublicKey publicKey)
         {
@@ -70,18 +81,21 @@ namespace ChaseNet2.Transport
             rng.NextBytes(bytes);
             var id = BitConverter.ToUInt64(bytes, 0);
             
-            var c = new Connection(this, new ConnectionTarget() { EndPoint = endPoint, PublicKey = publicKey, ConnectionID = id });
+            var c = new Connection(this, new ConnectionTarget() { EndPoint = endPoint, PublicKey = publicKey, ConnectionId = id });
             Connections.Add(c);
 
             Statistics.ConnectionCount = Connections.Count;
 
-            Log.Logger.Information($"Created connection to {0} with id {1}", endPoint, id);
+            Log.Logger.Information("Created connection to {0} with id {1}", endPoint, id);
 
             return c;
         }
         public void StartBackgroundThread()
         {
-            Task.Run(BackgroundThread);
+            Task.Run(BackgroundThread).ContinueWith((t) =>
+            {
+                Log.Logger.Error("Background thread crashed: {0}", t.Exception);
+            });
         }
         
         public void AttachHandler(ConnectionHandler connectionHandler)
@@ -115,6 +129,7 @@ namespace ChaseNet2.Transport
         {
             Stopwatch stopwatch= new Stopwatch();
             stopwatch.Start();
+            tickCount++;
             
             while (_client.Available>0)
             {
@@ -136,7 +151,22 @@ namespace ChaseNet2.Transport
             stopwatch.Stop();
 
             Statistics.AverageUpdateTime = (Statistics.AverageUpdateTime+stopwatch.Elapsed)/2;
-            
+            if (Connections.Count>0)
+            {
+                Statistics.AveragePing = Connections.Average(x => x.AveragePing);
+            }
+
+            if (tickCount>=TargetUpdateRate)
+            {
+                tickCount = 0;
+                
+                Statistics.BitsSentPerSecond = (Statistics.BytesSent - lastSentBytes)*8;
+                Statistics.BitsReceivedPerSecond = (Statistics.BytesReceived - lastReceivedBytes)*8;
+
+                lastSentBytes = Statistics.BytesSent;
+                lastReceivedBytes = Statistics.BytesReceived;
+            }
+
             return stopwatch.Elapsed;
         }
 
@@ -166,14 +196,14 @@ namespace ChaseNet2.Transport
                     {
                         ConnectionRequest request = Serializer.Deserialize<ConnectionRequest>(reader);
 
-                        if (Connections.Find(x => x.ConnectionId == request.ConnectionId) !=null)
+                        if (Connections.Find(x => x.ConnectionId == request.ConnectionId) != null)
                         {
                             return;
                         }
                         
-                        Log.Logger.Information("Attached a new connection from {EndPoint} with id {ConnectionId}", remoteEP, request.ConnectionId);
+                        AttachConnectionAsync(new ConnectionTarget() {EndPoint = remoteEP, PublicKey = request.PublicKey, ConnectionId = request.ConnectionId}).Wait();
 
-                        AttachConnection(new ConnectionTarget() {EndPoint = remoteEP, PublicKey = request.PublicKey, ConnectionID = request.ConnectionId});
+                        Log.Logger.Information("Attached a new connection from {EndPoint} with id {ConnectionId}", remoteEP, request.ConnectionId);
                     }
                     catch
                     {

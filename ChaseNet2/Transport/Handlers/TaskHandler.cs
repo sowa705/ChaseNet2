@@ -1,20 +1,19 @@
 using System.Threading.Tasks;
+using Serilog;
 
 namespace ChaseNet2.Transport
 {
     public class TaskHandler:IMessageHandler
     {
-        public TaskCompletionSource<bool> TaskCompletionSource;
-        public NetworkMessage Message;
+        public TaskCompletionSource<NetworkMessage> TaskCompletionSource;
 
         public TaskHandler()
         {
-            TaskCompletionSource = new TaskCompletionSource<bool>();
+            TaskCompletionSource = new TaskCompletionSource<NetworkMessage>(TaskCreationOptions.RunContinuationsAsynchronously);
         }
         public void HandleMessage(Connection connection, NetworkMessage message)
         {
-            Message = message;
-            TaskCompletionSource.SetResult(true);
+            TaskCompletionSource.SetResult(message);
         }
     }
 }

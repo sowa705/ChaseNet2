@@ -7,6 +7,7 @@ using System.Security.Cryptography;
 using System.Text;
 using ChaseNet2.Session.Messages;
 using ChaseNet2.Transport.Messages;
+using Serilog;
 
 namespace ChaseNet2.Serialization
 {
@@ -111,7 +112,7 @@ namespace ChaseNet2.Serialization
                 }
                 catch (Exception e)
                 {
-                    Console.WriteLine("Error deserializing type {0} with ID {1} because of {2}", type.FullName, id, e.Message);
+                    Log.Logger.Error("Error deserializing type {0} with ID {1} because of {2}", type.FullName, id, e.Message);
                     throw;
                 }
                 

@@ -3,11 +3,13 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
+using System.Linq;
 using System.Net;
 using System.Security.Cryptography;
 using System.Threading.Tasks;
 using ChaseNet2.Transport.Messages;
 using Serilog;
+using Serilog.Core;
 
 namespace ChaseNet2.Transport
 {
@@ -47,7 +49,7 @@ namespace ChaseNet2.Transport
         {
             PeerPublicKey = target.PublicKey;
             RemoteEndpoint = target.EndPoint;
-            ConnectionId = target.ConnectionID;
+            ConnectionId = target.ConnectionId;
             
             _manager = manager;
             
@@ -98,36 +100,33 @@ namespace ChaseNet2.Transport
             MessageHandlers.Remove(channelID);
         }
 
-        public async Task WaitForDeliveryAsync(NetworkMessage message)
+        public async Task<bool> WaitForDeliveryAsync(NetworkMessage message)
         {
             // get the message from the list of tracked messages
-            var sentMessage = _trackedSentMessages.Find(x => x.Message.ID == message.ID);
+            var sentMessage = _trackedSentMessages.First(x=>x.Message.ID==message.ID);
 
             // wait for the message to be delivered
-            sentMessage.DeliveryTask=new TaskCompletionSource<bool>();
-            
-            await sentMessage.DeliveryTask.Task;
+            sentMessage.DeliveryTask=new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            var result = await sentMessage.DeliveryTask.Task;
+            Log.Debug("Message {0} delivered",message.ID);
+            return result;
         }
         
         /// <summary>
-        /// Asynchronously wait for a message to arrive on a specific channel, wont work if the channel has a handler registered 
+        /// Asynchronously wait for a message to arrive on a specific channel
         /// </summary>
         public async Task<NetworkMessage> WaitForChannelMessageAsync(ulong channelID, TimeSpan timeout)
         {
             // we create a handler for this channel and wait for a message to arrive
+            Log.Information("Waiting for channel message on channel {channelID}",channelID);
 
             var handler = new TaskHandler();
             RegisterMessageHandler(channelID,handler);
             
             var task = handler.TaskCompletionSource.Task;
-            
-            if (await Task.WhenAny(task, Task.Delay(timeout)) != task) {
-                UnregisterMessageHandler(channelID);
-                throw new Exception("Timed out waiting for message to arrive"); 
-            }
-            
+            await task;
             UnregisterMessageHandler(channelID);
-            return handler.Message;
+            return task.Result;
         }
         
         public void CreateConnectMessage()
@@ -189,7 +188,7 @@ namespace ChaseNet2.Transport
                     var message = new NetworkMessage(messageID, channelID, messageType, messageContent);
                     message.State = MessageState.Received;
                     
-                    //Console.WriteLine("Message received: " + message);
+                    Log.Logger.Debug("Received message {MessageID} on channel {ChannelID} of type {MessageType} with content {Content}",messageID,channelID,messageType,messageContent.GetType());
                     
                     if (messageType.HasFlag(MessageType.Reliable)) //we need to acknowledge this message
                     {
@@ -244,11 +243,12 @@ namespace ChaseNet2.Transport
 
             foreach (var msg in _trackedSentMessages)
             {
-                if (msg.Message.State==MessageState.Sent && msg.LastSent+GetResendInterval()<DateTime.UtcNow)
+                if (msg.Message.State==MessageState.Sent && DateTime.UtcNow>msg.LastSent+GetResendInterval())
                 {
                     if (msg.ResendCount>3) //failed to deliver message
                     {
                         msg.Message.State = MessageState.Failed;
+                        Log.Information("Failed to deliver message {MessageID}",msg.Message.ID);
                         msg.DeliveryTask?.SetResult(false);
                         continue;
                     }
@@ -266,15 +266,16 @@ namespace ChaseNet2.Transport
             // send messages
             SendMessages();
         }
+        
         /// <summary>
         /// compute the resend interval based on the average ping and reasonable lower and upper bounds
         /// </summary>
         /// <returns></returns>
         public TimeSpan GetResendInterval()
         {
-            var resendInterval = (int) (AveragePing * 3.5f); //rtt + some extra time
+            var resendInterval = (int) (AveragePing * 3f); //rtt + some extra time
             
-            resendInterval = Math.Clamp(resendInterval, 100, 600); // clamp to reasonable values
+            resendInterval = Math.Clamp(resendInterval, 80, 500); // clamp to reasonable values
             
             return TimeSpan.FromMilliseconds(resendInterval);
         }

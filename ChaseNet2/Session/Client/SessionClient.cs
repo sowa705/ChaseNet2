@@ -1,25 +1,35 @@
 using System;
+using System.Linq;
 using System.Threading.Tasks;
 using ChaseNet2.Session.Messages;
 using ChaseNet2.Transport;
+using Serilog;
+using Serilog.Core;
 
 namespace ChaseNet2.Session
 {
     public class SessionClient : ConnectionHandler
     {
         private Connection _trackerConnection;
+        private ConnectionManager _connectionManager;
         public SessionClientState State { get; private set; }
+        public SessionUpdate LastSessionUpdate { get; private set; }
         
         NetworkMessage _connectMessage;
         public string SessionId { get; private set; }
-        public SessionClient(string sessionName, Connection trackerConnection)
+        public SessionClient(string sessionName, ConnectionManager manager, Connection trackerConnection)
         {
+            _connectionManager = manager;
+            _connectionManager.AttachHandler(this);
             AddConnection(trackerConnection.ConnectionId);
             _trackerConnection = trackerConnection;
             SessionId = sessionName;
+            
+            _trackerConnection.RegisterMessageHandler((ulong) InternalChannelType.TrackerInternal, new SessionClientMessageHandler(this));
         }
-        public override void OnManagerConnect(Connection connection) // client does not accept incoming connections
+        public override async Task OnManagerConnect(Connection connection) // client does not accept incoming connections so we don't need to do anything here
         {
+            await Task.CompletedTask;
         }
 
         public override void ConnectionUpdate(Connection connection)
@@ -52,6 +62,54 @@ namespace ChaseNet2.Session
             else
             {
                 State = SessionClientState.Disconnected;
+            }
+        }
+
+        public void ProcessSessionUpdate(SessionUpdate update)
+        {
+            // update our session state
+            LastSessionUpdate = update;
+            
+            // update our connections to match the session state
+            var ConnectionsToAdd = update.Peers.Where(x =>
+                _connectionManager.Connections.FirstOrDefault(y => y.ConnectionId == x.ConnectionId)==null);
+            
+            var ConnectionsToRemove = ConnectionIDs.Where(x =>
+                update.Peers.FirstOrDefault(y => y.ConnectionId == x)==null).ToList();
+
+            foreach (var connection in ConnectionsToAdd)
+            {
+                if (connection.ConnectionId==0) // this is us
+                    continue;
+                Log.Logger.Information("Connecting to a new peer with connectionID {ConnectionId}", connection.ConnectionId, SessionId);
+                _connectionManager.AttachConnectionAsync(connection).Wait();
+                AddConnection(connection.ConnectionId);
+            }
+            foreach (var connection in ConnectionsToRemove)
+            {
+                if (connection==0||connection==_trackerConnection.ConnectionId) // this is us
+                    continue;
+                _connectionManager.RemoveConnection(connection);
+                RemoveConnection(connection);
+            }
+        }
+    }
+    
+    public class SessionClientMessageHandler : IMessageHandler
+    {
+        SessionClient _client;
+        public SessionClientMessageHandler(SessionClient client)
+        {
+            _client = client;
+        }
+        
+        public void HandleMessage(Connection connection, NetworkMessage message)
+        {
+            switch (message.Content)
+            {
+                case SessionUpdate update:
+                    _client.ProcessSessionUpdate(update);
+                    break;
             }
         }
     }
