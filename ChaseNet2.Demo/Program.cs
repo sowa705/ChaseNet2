@@ -8,7 +8,7 @@ using Serilog.Events;
 using Serilog.Exceptions;
 
 Logger logger = new LoggerConfiguration()
-    .MinimumLevel.Debug()
+    //.MinimumLevel.Debug()
     .WriteTo.Console()
     .CreateLogger();
 
@@ -21,21 +21,16 @@ tracker.SessionName="MySession";
 
 host.StartBackgroundThread();
 
-List<(ConnectionManager,SessionClient)> clients = new List<(ConnectionManager,SessionClient)>();
 
-ConnectionManager client = new ConnectionManager();
-var connection = client.CreateConnection(IPEndPoint.Parse("127.0.0.1:6000"), host.PublicKey);
-//var connection2 = client.CreateConnection(IPEndPoint.Parse("127.0.0.1:6000"), host.PublicKey);
-
+for (int i = 0; i < 20; i++)
+{
+    ConnectionManager client = new ConnectionManager();
+    var connection = client.CreateConnection(IPEndPoint.Parse("127.0.0.1:6000"), host.PublicKey);
+    SessionClient sessionClient = new SessionClient("MySession", client, connection);
     
-SessionClient sessionClient = new SessionClient("MySession", client, connection);
-//SessionClient sessionClient2 = new SessionClient("MySession", client, connection2);
-
-client.StartBackgroundThread();
-
-await sessionClient.Connect();
-//await sessionClient2.Connect();
-
+    client.StartBackgroundThread();
+    sessionClient.Connect();
+}
 
 int counter=0;
 
@@ -46,11 +41,6 @@ while (true)
     if (counter%50==0)
     {
         Console.WriteLine($"Host statistics: {host.Statistics}");
-        
-        foreach (var c in clients)
-        {
-            Console.WriteLine($"Client statistics: {c.Item1.Statistics}");
-        }
     }
     await Task.Delay(16);
 }

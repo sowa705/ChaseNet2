@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 using ChaseNet2.Transport;
 using ChaseNet2.Transport.Messages;
 using Serilog;
@@ -27,13 +28,11 @@ namespace ChaseNet2.Session
             Connections.Remove(connection);
         }
 
-        public override void OnManagerConnect(Connection connection)
+        public override async Task OnManagerConnect(Connection connection)
         {
-            Log.Logger.Information("New connection established");
             var c = new TrackerConnection() { Connection = connection, SessionTracker = this };
             Connections.Add(c);
             AddConnection(connection.ConnectionId);
-            Log.Logger.Information("Connection added to list");
             c.HandleNewConnection();
         }
 

@@ -13,7 +13,6 @@ namespace ChaseNet2.Transport
         }
         public void HandleMessage(Connection connection, NetworkMessage message)
         {
-            Log.Information("TaskHandler.HandleMessage");
             TaskCompletionSource.SetResult(message);
         }
     }

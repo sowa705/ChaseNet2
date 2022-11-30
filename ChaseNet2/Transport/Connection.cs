@@ -49,7 +49,7 @@ namespace ChaseNet2.Transport
         {
             PeerPublicKey = target.PublicKey;
             RemoteEndpoint = target.EndPoint;
-            ConnectionId = target.ConnectionID;
+            ConnectionId = target.ConnectionId;
             
             _manager = manager;
             
@@ -113,7 +113,7 @@ namespace ChaseNet2.Transport
         }
         
         /// <summary>
-        /// Asynchronously wait for a message to arrive on a specific channel, wont work if the channel has a handler registered 
+        /// Asynchronously wait for a message to arrive on a specific channel
         /// </summary>
         public async Task<NetworkMessage> WaitForChannelMessageAsync(ulong channelID, TimeSpan timeout)
         {
@@ -188,7 +188,7 @@ namespace ChaseNet2.Transport
                     var message = new NetworkMessage(messageID, channelID, messageType, messageContent);
                     message.State = MessageState.Received;
                     
-                    Log.Logger.Information("Received message {MessageID} on channel {ChannelID} of type {MessageType} with content {Content}",messageID,channelID,messageType,messageContent.GetType());
+                    Log.Logger.Debug("Received message {MessageID} on channel {ChannelID} of type {MessageType} with content {Content}",messageID,channelID,messageType,messageContent.GetType());
                     
                     if (messageType.HasFlag(MessageType.Reliable)) //we need to acknowledge this message
                     {
@@ -243,7 +243,7 @@ namespace ChaseNet2.Transport
 
             foreach (var msg in _trackedSentMessages)
             {
-                if (msg.Message.State==MessageState.Sent && msg.LastSent+GetResendInterval()<DateTime.UtcNow)
+                if (msg.Message.State==MessageState.Sent && DateTime.UtcNow>msg.LastSent+GetResendInterval())
                 {
                     if (msg.ResendCount>3) //failed to deliver message
                     {

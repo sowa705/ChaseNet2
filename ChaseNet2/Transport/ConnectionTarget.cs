@@ -7,13 +7,34 @@ namespace ChaseNet2.Transport
 {
     public class ConnectionTarget : IStreamSerializable
     {
-        public ECDiffieHellmanPublicKey PublicKey { get; set; }
-        public ulong ConnectionID { get; set; }
+        public ECDiffieHellmanPublicKey PublicKey
+        {
+            //this is an optimization because instantiating public key class is extremely slow (calls to internal windows bullshit) and we don't need to do it most of the time
+            get
+            {
+                if (_publicKey == null)
+                {
+                    _publicKey = ECDiffieHellmanCngPublicKey.FromByteArray(_publicKeyBytes, CngKeyBlobFormat.EccPublicBlob);
+                }
+                return _publicKey;
+            }
+            set
+            {
+                _publicKey = value;
+                _publicKeyBytes = _publicKey.ToByteArray();
+            }
+        }
+
+        public ulong ConnectionId { get; set; }
         public IPEndPoint EndPoint { get; set; }
+        
+        private byte[]? _publicKeyBytes;
+        private ECDiffieHellmanPublicKey? _publicKey;
+        
         public int Serialize(BinaryWriter writer)
         {
-            writer.Write(ConnectionID);
-            var pkbytes = PublicKey.ToByteArray();
+            writer.Write(ConnectionId);
+            var pkbytes = _publicKeyBytes;
             writer.Write(pkbytes.Length);
             writer.Write(pkbytes);
             
@@ -28,11 +49,11 @@ namespace ChaseNet2.Transport
 
         public void Deserialize(BinaryReader reader)
         {
-            ConnectionID = reader.ReadUInt64();
+            ConnectionId = reader.ReadUInt64();
             var pklen = reader.ReadInt32();
             var pkbytes = reader.ReadBytes(pklen);
-            PublicKey = ECDiffieHellmanCngPublicKey.FromByteArray(pkbytes, CngKeyBlobFormat.EccPublicBlob);
-            
+            _publicKeyBytes = pkbytes;
+
             var addrlen = reader.ReadInt32();
             var addrbytes = reader.ReadBytes(addrlen);
             var address = new IPAddress(addrbytes);

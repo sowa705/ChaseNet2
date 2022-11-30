@@ -1,15 +1,16 @@
 using System.Collections.Generic;
+using System.Threading.Tasks;
 
 namespace ChaseNet2.Transport
 {
     public abstract class ConnectionHandler
     {
-        List<ulong> ConnectionIDs = new List<ulong>();
+        public List<ulong> ConnectionIDs = new List<ulong>();
         
         /// <summary>
         /// Called when ConnectionManager gets a new incoming connection on all handlers
         /// </summary>
-        public abstract void OnManagerConnect(Connection connection);
+        public abstract Task OnManagerConnect(Connection connection);
 
         public abstract void ConnectionUpdate(Connection connection);
         

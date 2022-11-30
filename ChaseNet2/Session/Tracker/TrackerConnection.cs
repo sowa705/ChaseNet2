@@ -21,7 +21,7 @@ namespace ChaseNet2.Session
         {
             if (State==TrackerConnectionState.Connected)
             {
-                if (_lastSessionUpdate+TimeSpan.FromSeconds(1)<DateTime.UtcNow) // send session update every second
+                if (_lastSessionUpdate+TimeSpan.FromSeconds(3)<DateTime.UtcNow) // send session update every second
                 {
                     _lastSessionUpdate = DateTime.UtcNow;
                     
@@ -31,6 +31,9 @@ namespace ChaseNet2.Session
                     {
                         sessionUpdate.Peers.Add(new ConnectionTarget()
                         {
+                            // we compute a somewhat unique id for each connection
+                            // this is used to identify the connection on the other side and must be the same for both peers
+                            ConnectionId = con.Connection.ConnectionId^Connection.ConnectionId,
                             EndPoint = con.Connection.RemoteEndpoint,
                             PublicKey = con.Connection.PeerPublicKey
                         });
@@ -52,7 +55,6 @@ namespace ChaseNet2.Session
         {
             Log.Information("New connection from {remote}", Connection.RemoteEndpoint);
             var message=await Connection.WaitForChannelMessageAsync((ulong)InternalChannelType.SessionJoin, TimeSpan.FromSeconds(5));
-            Log.Warning("Receiveld");
 
             var joinRequest = message.Content as JoinSession;
 

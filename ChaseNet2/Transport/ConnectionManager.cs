@@ -35,6 +35,11 @@ namespace ChaseNet2.Transport
         /// </summary>
         public float TargetUpdateRate { get; set; } = 30;
 
+        int tickCount = 0;
+        
+        long lastSentBytes = 0;
+        long lastReceivedBytes = 0;
+
         public ConnectionManager(int? port = null)
         {
             _ecdh = new ECDiffieHellmanCng();
@@ -50,7 +55,7 @@ namespace ChaseNet2.Transport
             
             rng = new Random();
         }
-        public Connection AttachConnection(ConnectionTarget target)
+        public async Task<Connection> AttachConnectionAsync(ConnectionTarget target)
         {
             var c = new Connection(this, target);
             Connections.Add(c);
@@ -59,10 +64,16 @@ namespace ChaseNet2.Transport
 
             foreach (var h in Handlers)
             {
-                h.OnManagerConnect(c);
+                await h.OnManagerConnect(c);
             }
 
             return c;
+        }
+        public void RemoveConnection(ulong connectionId)
+        {
+            var c = Connections.Find(c => c.ConnectionId == connectionId);
+            Connections.Remove(c);
+            Statistics.ConnectionCount = Connections.Count;
         }
         public Connection CreateConnection(IPEndPoint endPoint, ECDiffieHellmanPublicKey publicKey)
         {
@@ -70,7 +81,7 @@ namespace ChaseNet2.Transport
             rng.NextBytes(bytes);
             var id = BitConverter.ToUInt64(bytes, 0);
             
-            var c = new Connection(this, new ConnectionTarget() { EndPoint = endPoint, PublicKey = publicKey, ConnectionID = id });
+            var c = new Connection(this, new ConnectionTarget() { EndPoint = endPoint, PublicKey = publicKey, ConnectionId = id });
             Connections.Add(c);
 
             Statistics.ConnectionCount = Connections.Count;
@@ -118,6 +129,7 @@ namespace ChaseNet2.Transport
         {
             Stopwatch stopwatch= new Stopwatch();
             stopwatch.Start();
+            tickCount++;
             
             while (_client.Available>0)
             {
@@ -142,6 +154,17 @@ namespace ChaseNet2.Transport
             if (Connections.Count>0)
             {
                 Statistics.AveragePing = Connections.Average(x => x.AveragePing);
+            }
+
+            if (tickCount>=TargetUpdateRate)
+            {
+                tickCount = 0;
+                
+                Statistics.BitsSentPerSecond = (Statistics.BytesSent - lastSentBytes)*8;
+                Statistics.BitsReceivedPerSecond = (Statistics.BytesReceived - lastReceivedBytes)*8;
+
+                lastSentBytes = Statistics.BytesSent;
+                lastReceivedBytes = Statistics.BytesReceived;
             }
 
             return stopwatch.Elapsed;
@@ -178,7 +201,7 @@ namespace ChaseNet2.Transport
                             return;
                         }
                         
-                        AttachConnection(new ConnectionTarget() {EndPoint = remoteEP, PublicKey = request.PublicKey, ConnectionID = request.ConnectionId});
+                        AttachConnectionAsync(new ConnectionTarget() {EndPoint = remoteEP, PublicKey = request.PublicKey, ConnectionId = request.ConnectionId}).Wait();
 
                         Log.Logger.Information("Attached a new connection from {EndPoint} with id {ConnectionId}", remoteEP, request.ConnectionId);
                     }
