@@ -45,6 +45,7 @@ namespace ChaseNet2.Serialization
         public void RegisterChaseNetTypes()
         {
             RegisterType(typeof(ConnectionRequest));
+            RegisterType(typeof(ConnectionResponse));
             RegisterType(typeof(Ack));
             RegisterType(typeof(Ping));
             RegisterType(typeof(Pong));
