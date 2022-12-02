@@ -6,8 +6,10 @@ using System.IO.Compression;
 using System.Linq;
 using System.Net;
 using System.Security.Cryptography;
+using System.Text;
 using System.Threading.Tasks;
 using ChaseNet2.Transport.Messages;
+using Org.BouncyCastle.Crypto;
 using Serilog;
 using Serilog.Core;
 
@@ -15,7 +17,7 @@ namespace ChaseNet2.Transport
 {
     public partial class Connection
     {
-        public ECDiffieHellmanPublicKey PeerPublicKey;
+        public AsymmetricKeyParameter PeerPublicKey;
         public ulong ConnectionId { get; private set; }
         
         public IPEndPoint RemoteEndpoint;
@@ -157,7 +159,7 @@ namespace ChaseNet2.Transport
             _manager.SendPacket(((MemoryStream)writer.BaseStream).ToArray(), RemoteEndpoint, 0xBDDDDDDDD);
         }
         
-        public void SetPeerPublicKey(ECDiffieHellmanPublicKey key)
+        public void SetPeerPublicKey(AsymmetricKeyParameter key)
         {
             PeerPublicKey = key;
             _sharedKey = _manager.ComputeSharedSecretKey(PeerPublicKey,ConnectionId);
