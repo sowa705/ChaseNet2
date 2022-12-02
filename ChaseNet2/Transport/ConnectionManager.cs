@@ -173,7 +173,16 @@ namespace ChaseNet2.Transport
         void ProcessIncomingPacket()
         {
             var remoteEP = new IPEndPoint(IPAddress.Any, 0);
-            var data = _client.Receive(ref remoteEP);
+            byte[] data;
+            try
+            {
+                data = _client.Receive(ref remoteEP);
+            }
+            catch (Exception e)
+            {
+                Log.Logger.Error("Error receiving packet: {0}", e);
+                return;
+            }
             
             var targetConnection = BitConverter.ToUInt64(data, 0);
             
@@ -233,6 +242,7 @@ namespace ChaseNet2.Transport
                     }
                     var connection = Connections.Find(x => x.ConnectionId == response.ConnectionId);
                     connection.SetPeerPublicKey(response.PublicKey);
+                    connection.SetState(ConnectionState.Connected);
                     Log.Logger.Information("Connection {ConnectionID} established with {EndPoint}",response.ConnectionId, remoteEP);
                 }
                 catch (Exception e)
