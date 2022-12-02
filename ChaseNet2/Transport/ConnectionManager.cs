@@ -148,6 +148,13 @@ namespace ChaseNet2.Transport
                 }
             }
             
+            // run all connection handler updates
+            
+            foreach (var handler in Handlers)
+            {
+                handler.Update();
+            }
+            
             stopwatch.Stop();
 
             Statistics.AverageUpdateTime = (Statistics.AverageUpdateTime+stopwatch.Elapsed)/2;

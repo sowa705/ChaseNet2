@@ -4,12 +4,16 @@ Peer to peer networking library written in pure C#
 ## Advantages
 
 * Real P2P system
-* Full encryption between peers
 * Powerful serialization system
-* Data compression
+* Custom protocol
+  * Low latency - UDP based
+  * Message acknowledgement and retransmission
+  * Message compression
+  * E2E encryption
 
 ## TODO
 
-* Make it work lol
-* Tracker code
+* More tracker features
 * External key exchange
+* Unity engine support
+* Documentation

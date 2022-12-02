@@ -14,6 +14,8 @@ namespace ChaseNet2.Transport
 
         public abstract void ConnectionUpdate(Connection connection);
         
+        public abstract void Update();
+
         public void AddConnection(ulong ConnectionID)
         {
             ConnectionIDs.Add(ConnectionID);

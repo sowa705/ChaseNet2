@@ -37,6 +37,10 @@ namespace ChaseNet2.Session
             
         }
 
+        public override void Update()
+        {
+        }
+
         public async Task Connect()
         {
             var joinSessionMessage = new JoinSession() { SessionName = SessionId };
