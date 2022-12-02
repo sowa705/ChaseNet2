@@ -6,8 +6,10 @@ using System.IO.Compression;
 using System.Linq;
 using System.Net;
 using System.Security.Cryptography;
+using System.Text;
 using System.Threading.Tasks;
 using ChaseNet2.Transport.Messages;
+using Org.BouncyCastle.Crypto;
 using Serilog;
 using Serilog.Core;
 
@@ -15,7 +17,7 @@ namespace ChaseNet2.Transport
 {
     public partial class Connection
     {
-        public ECDiffieHellmanPublicKey PeerPublicKey;
+        public AsymmetricKeyParameter PeerPublicKey;
         public ulong ConnectionId { get; private set; }
         
         public IPEndPoint RemoteEndpoint;
@@ -157,7 +159,7 @@ namespace ChaseNet2.Transport
             _manager.SendPacket(((MemoryStream)writer.BaseStream).ToArray(), RemoteEndpoint, 0xBDDDDDDDD);
         }
         
-        public void SetPeerPublicKey(ECDiffieHellmanPublicKey key)
+        public void SetPeerPublicKey(AsymmetricKeyParameter key)
         {
             PeerPublicKey = key;
             _sharedKey = _manager.ComputeSharedSecretKey(PeerPublicKey,ConnectionId);
@@ -182,10 +184,10 @@ namespace ChaseNet2.Transport
             using var cs = new CryptoStream(stream, aes.CreateDecryptor(_sharedKey,initializationVector), CryptoStreamMode.Read);
             
             // decompress the packet
-            using var ds = new DeflateStream(cs, CompressionMode.Decompress);
+            //using var ds = new DeflateStream(cs, CompressionMode.Decompress);
             
             // read packet preamble
-            var reader = new BinaryReader(ds);
+            var reader = new BinaryReader(cs);
 
             try
             {
@@ -196,9 +198,9 @@ namespace ChaseNet2.Transport
                     return;
                 }
             }
-            catch
+            catch (Exception e)
             {
-                Log.Logger.Warning("Received an invalid packet");
+                Log.Logger.Warning("Received an invalid packet ({e})",e);
                 return;
             }
             
@@ -340,9 +342,9 @@ namespace ChaseNet2.Transport
                 // prepare encryption and compression streams
                 var aes = _manager.CreateAes(_sharedKey, iv);
                 var cs = new CryptoStream(ms, aes.CreateEncryptor(), CryptoStreamMode.Write);
-                var ds = new DeflateStream(cs, CompressionLevel.Optimal, true);
+                //var ds = new DeflateStream(cs, CompressionLevel.Optimal, true);
                 // write packet preamble
-                var writer = new BinaryWriter(ds);
+                var writer = new BinaryWriter(cs);
                 writer.Write(0x12345678);
                 
                 // write messages until we run out of space or packets
@@ -358,18 +360,25 @@ namespace ChaseNet2.Transport
                     int contentSize=_manager.Serializer.Serialize(message.Content,writer);
                     
                     message.State = MessageState.Sent;
+                    
+                    Log.Debug("Sending message {MessageID} on channel {ChannelID} of type {MessageType} with content {Content}",message.ID,message.ChannelID,message.Type,message.Content.GetType());
 
                     currentPacketSize += 4 + 1 + contentSize; //messageID + messageType + content
                 }
                 
                 // flush the streams
                 writer.Flush();
-                ds.Flush();
+                //ds.Flush();
                 cs.FlushFinalBlock();
                 ms.Flush();
                 // send the packet
                 _manager.SendPacket(ms.ToArray(), RemoteEndpoint, ConnectionId);
             }
+        }
+
+        public void SetState(ConnectionState state)
+        {
+            State = state;
         }
     }
 }

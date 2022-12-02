@@ -22,11 +22,6 @@ namespace ChaseNet2.Session
             ConnectionManager.AttachHandler(this);
             connectionManager.AcceptNewConnections = true;
         }
-        
-        public void RemoveConnection(TrackerConnection connection)
-        {
-            Connections.Remove(connection);
-        }
 
         public override async Task OnManagerConnect(Connection connection)
         {
@@ -44,6 +39,11 @@ namespace ChaseNet2.Session
             {
                 trackerConnection.Update();
             }
+        }
+
+        public override void Update()
+        {
+            Connections.RemoveAll(x=>x.Connection.State == ConnectionState.Disconnected);
         }
     }
 }

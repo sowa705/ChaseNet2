@@ -10,15 +10,15 @@ using System.Threading;
 using System.Threading.Tasks;
 using ChaseNet2.Serialization;
 using ChaseNet2.Transport.Messages;
+using Org.BouncyCastle.Crypto;
 using Serilog;
 
 namespace ChaseNet2.Transport
 {
     public class ConnectionManager
     {
-        ECDiffieHellmanCng _ecdh;
-
-        public ECDiffieHellmanPublicKey PublicKey { get => _ecdh.PublicKey; }
+        AsymmetricCipherKeyPair _keyPair;
+        public AsymmetricKeyParameter PublicKey { get => _keyPair.Public; }
         private UdpClient _client;
         public List<Connection> Connections { get; private set; }
         
@@ -42,7 +42,7 @@ namespace ChaseNet2.Transport
 
         public ConnectionManager(int? port = null)
         {
-            _ecdh = new ECDiffieHellmanCng();
+            _keyPair = CryptoHelper.GenerateKeyPair();
 
             _client = port == null ? new UdpClient() : new UdpClient(port.Value);
 
@@ -148,6 +148,13 @@ namespace ChaseNet2.Transport
                 }
             }
             
+            // run all connection handler updates
+            
+            foreach (var handler in Handlers)
+            {
+                handler.Update();
+            }
+            
             stopwatch.Stop();
 
             Statistics.AverageUpdateTime = (Statistics.AverageUpdateTime+stopwatch.Elapsed)/2;
@@ -173,7 +180,16 @@ namespace ChaseNet2.Transport
         void ProcessIncomingPacket()
         {
             var remoteEP = new IPEndPoint(IPAddress.Any, 0);
-            var data = _client.Receive(ref remoteEP);
+            byte[] data;
+            try
+            {
+                data = _client.Receive(ref remoteEP);
+            }
+            catch (Exception e)
+            {
+                Log.Logger.Error("Error receiving packet: {0}", e);
+                return;
+            }
             
             var targetConnection = BitConverter.ToUInt64(data, 0);
             
@@ -233,6 +249,7 @@ namespace ChaseNet2.Transport
                     }
                     var connection = Connections.Find(x => x.ConnectionId == response.ConnectionId);
                     connection.SetPeerPublicKey(response.PublicKey);
+                    connection.SetState(ConnectionState.Connected);
                     Log.Logger.Information("Connection {ConnectionID} established with {EndPoint}",response.ConnectionId, remoteEP);
                 }
                 catch (Exception e)
@@ -250,9 +267,17 @@ namespace ChaseNet2.Transport
             c.ReadInputStream(ms);
         }
         
-        public byte[] ComputeSharedSecretKey(ECDiffieHellmanPublicKey remotePublicKey, ulong connectionID)
+        public byte[] ComputeSharedSecretKey(AsymmetricKeyParameter remotePublicKey, ulong connectionID)
         {
-            return _ecdh.DeriveKeyFromHash(remotePublicKey, HashAlgorithmName.SHA256, BitConverter.GetBytes(connectionID),null);
+            byte[] sharedSecret = CryptoHelper.GenerateDHKey(_keyPair.Private, remotePublicKey);
+            
+            // add connection id to shared secret
+            byte[] hash = new byte[32];
+            SHA256Managed sha = new SHA256Managed();
+            sha.TransformBlock(sharedSecret, 0, sharedSecret.Length, null, 0);
+            sha.TransformFinalBlock(BitConverter.GetBytes(connectionID), 0, 8);
+            
+            return sha.Hash;
         }
         
         public Aes CreateAes(byte[] key,byte[] iv)

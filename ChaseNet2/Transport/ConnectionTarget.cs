@@ -2,14 +2,14 @@ using System.IO;
 using System.Net;
 using System.Security.Cryptography;
 using ChaseNet2.Serialization;
+using Org.BouncyCastle.Crypto;
 
 namespace ChaseNet2.Transport
 {
     public class ConnectionTarget : IStreamSerializable
     {
-        public ECDiffieHellmanPublicKey PublicKey
+        public AsymmetricKeyParameter PublicKey
         {
-            //this is an optimization because instantiating public key class is extremely slow (calls to internal windows bullshit) and we don't need to do it most of the time
             get
             {
                 if (_publicKey == null)
@@ -18,7 +18,8 @@ namespace ChaseNet2.Transport
                     {
                         return null;
                     }
-                    _publicKey = ECDiffieHellmanCngPublicKey.FromByteArray(_publicKeyBytes, CngKeyBlobFormat.EccPublicBlob);
+
+                    _publicKey = CryptoHelper.DeserializePublicKey(_publicKeyBytes);
                 }
                 return _publicKey;
             }
@@ -27,7 +28,7 @@ namespace ChaseNet2.Transport
                 _publicKey = value;
                 if (_publicKey!=null)
                 {
-                    _publicKeyBytes = _publicKey.ToByteArray();
+                    _publicKeyBytes = CryptoHelper.SerializePublicKey(_publicKey);
                 }
                 else
                 {
@@ -40,7 +41,7 @@ namespace ChaseNet2.Transport
         public IPEndPoint EndPoint { get; set; }
         
         private byte[]? _publicKeyBytes;
-        private ECDiffieHellmanPublicKey? _publicKey;
+        private AsymmetricKeyParameter? _publicKey;
         
         public int Serialize(BinaryWriter writer)
         {

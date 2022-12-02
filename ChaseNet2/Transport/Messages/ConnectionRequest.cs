@@ -1,17 +1,17 @@
 ﻿using System.IO;
-using System.Security.Cryptography;
 using ChaseNet2.Serialization;
+using Org.BouncyCastle.Crypto;
 
 namespace ChaseNet2.Transport.Messages
 {
     public class ConnectionRequest : IStreamSerializable
     {
-        public ECDiffieHellmanPublicKey PublicKey { get; set; }
+        public AsymmetricKeyParameter PublicKey { get; set; }
         public ulong ConnectionId { get; set; }
         public int Serialize(BinaryWriter writer)
         {
             writer.Write(ConnectionId);
-            var pkBytes = PublicKey.ToByteArray()!;
+            var pkBytes = CryptoHelper.SerializePublicKey(PublicKey);
             writer.Write(pkBytes.Length);
             writer.Write(pkBytes);
             return 8+4+pkBytes.Length;
@@ -21,7 +21,7 @@ namespace ChaseNet2.Transport.Messages
             ConnectionId = reader.ReadUInt64();
             var pkLength = reader.ReadInt32();
             var pkBytes = reader.ReadBytes(pkLength);
-            PublicKey = ECDiffieHellmanCngPublicKey.FromByteArray(pkBytes, CngKeyBlobFormat.EccPublicBlob);
+            PublicKey = CryptoHelper.DeserializePublicKey(pkBytes);
         }
     }
 }
