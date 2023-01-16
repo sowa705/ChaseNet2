@@ -1,6 +1,5 @@
 ﻿using System.Diagnostics;
 using System.Net;
-using ChaseNet2.FileTransfer;
 using ChaseNet2.Session;
 using ChaseNet2.Transport;
 using Mono.Nat;
