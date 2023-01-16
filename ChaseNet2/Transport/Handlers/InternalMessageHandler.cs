@@ -44,8 +44,6 @@ namespace ChaseNet2.Transport
                             connection.AveragePing = (connection.AveragePing + (float) pingTime.TotalMilliseconds) / 2; // simple moving average
                             connection.LastReceivedPong = DateTime.UtcNow;
                                     
-                            //Console.WriteLine($"Ping {connection.AveragePing}");
-                                    
                             connection.State = ConnectionState.Connected; // ping came back so obviously we are connected
                         }
                         break;

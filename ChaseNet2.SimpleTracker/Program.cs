@@ -11,9 +11,8 @@ Logger logger = new LoggerConfiguration()
 Log.Logger = logger;
 
 ConnectionManager cm = new ConnectionManager(2137);
-cm.AcceptNewConnections = true;
-
-SessionTracker st = new SessionTracker(cm);
+SessionTracker st = new SessionTracker();
+cm.AttachHandler(st);
 
 st.SessionName = "TrackerSession";
 

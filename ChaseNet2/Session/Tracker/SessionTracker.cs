@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using ChaseNet2.Transport;
 using ChaseNet2.Transport.Messages;
@@ -14,13 +15,16 @@ namespace ChaseNet2.Session
         
         public List<TrackerConnection> Connections { get; set; }
         
-        public SessionTracker(ConnectionManager connectionManager)
+        public SessionTracker()
         {
             Connections = new List<TrackerConnection>();
-            ConnectionManager = connectionManager;
-            
-            ConnectionManager.AttachHandler(this);
-            connectionManager.AcceptNewConnections = true;
+        }
+
+        public override Task OnAttached(ConnectionManager manager)
+        {
+            ConnectionManager = manager;
+            ConnectionManager.AcceptNewConnections = true;
+            return Task.CompletedTask;
         }
 
         public override async Task OnManagerConnect(Connection connection)
@@ -43,7 +47,12 @@ namespace ChaseNet2.Session
 
         public override void Update()
         {
-            Connections.RemoveAll(x=>x.Connection.State == ConnectionState.Disconnected);
+            var connectionsToRemove = Connections.Where(x=>x.Connection.State == ConnectionState.Disconnected);
+            foreach (var connection in connectionsToRemove)
+            {
+                ConnectionManager.RemoveConnection(connection.Connection.ConnectionId);
+            }
+            Connections.RemoveAll(x => x.Connection.State == ConnectionState.Disconnected);
         }
     }
 }

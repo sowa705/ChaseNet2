@@ -15,7 +15,8 @@ Logger logger = new LoggerConfiguration()
 Log.Logger = logger;
 
 ConnectionManager host = new ConnectionManager(6000);
-SessionTracker tracker = new SessionTracker(host);
+SessionTracker tracker = new SessionTracker();
+host.AttachHandler(tracker);
 
 tracker.SessionName="MySession";
 

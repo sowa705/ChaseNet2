@@ -15,6 +15,8 @@ namespace ChaseNet2.Session
         public SessionClientState State { get; private set; }
         public SessionUpdate LastSessionUpdate { get; private set; }
         
+        public ulong TrackerConnectionId { get => _trackerConnection.ConnectionId;  }
+        
         NetworkMessage _connectMessage;
         public string SessionId { get; private set; }
         public SessionClient(string sessionName, ConnectionManager manager, Connection trackerConnection)
@@ -27,9 +29,15 @@ namespace ChaseNet2.Session
             
             _trackerConnection.RegisterMessageHandler((ulong) InternalChannelType.TrackerInternal, new SessionClientMessageHandler(this));
         }
-        public override async Task OnManagerConnect(Connection connection) // client does not accept incoming connections so we don't need to do anything here
+
+        public override Task OnAttached(ConnectionManager manager)
         {
-            await Task.CompletedTask;
+            return Task.CompletedTask;
+        }
+
+        public override Task OnManagerConnect(Connection connection) // client does not accept incoming connections so we don't need to do anything here
+        {
+            return Task.CompletedTask;
         }
 
         public override void ConnectionUpdate(Connection connection)

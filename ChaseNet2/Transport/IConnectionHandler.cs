@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
 
 namespace ChaseNet2.Transport
@@ -7,6 +8,8 @@ namespace ChaseNet2.Transport
     {
         public List<ulong> ConnectionIDs = new List<ulong>();
         
+        public abstract Task OnAttached(ConnectionManager manager);
+
         /// <summary>
         /// Called when ConnectionManager gets a new incoming connection on all handlers
         /// </summary>

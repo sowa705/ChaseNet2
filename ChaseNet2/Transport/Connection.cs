@@ -270,9 +270,9 @@ namespace ChaseNet2.Transport
                 EnqueueInternalMessage(MessageType.Unreliable, p);
             }
 
-            if (LastReceivedPong+TimeSpan.FromSeconds(5)<DateTime.UtcNow&&State!=ConnectionState.Started)
+            if (LastReceivedPong+TimeSpan.FromSeconds(5)<DateTime.UtcNow&&(State!=ConnectionState.Started||State!=ConnectionState.Disconnected))
             {
-                //Log.Logger.Warning("Lost connection {0}, trying to reconnect", ConnectionId);
+                Log.Logger.Warning("Lost connection {0}, trying to reconnect", ConnectionId);
                 State = ConnectionState.Disconnected; // we haven't received a pong in 5 seconds so we are probably disconnected
             }
             
