@@ -62,7 +62,7 @@ namespace ChaseNet2.Transport
                         }
                         
                         var splitMessage = connection._splitReceivedMessages[splitMessagePart.OriginalMessageId];
-                        Log.Debug("Added part {part} of {total} to split message {id}", splitMessagePart.PartNumber, splitMessagePart.TotalParts, splitMessagePart.OriginalMessageId);
+                        Log.Debug("Added part {part}  ({partCount}/{total}) to split message {id}", splitMessagePart.PartNumber, splitMessage.ReceivedParts.Count,splitMessagePart.TotalParts, splitMessagePart.OriginalMessageId);
                         splitMessage.AddPart(splitMessagePart);
 
                         if (splitMessage.IsComplete())

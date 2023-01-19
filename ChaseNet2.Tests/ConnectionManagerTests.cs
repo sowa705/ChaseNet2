@@ -47,6 +47,9 @@ public class ConnectionManagerTests
         first.AcceptNewConnections = true;
         var second = new ConnectionManager();
         
+        first.Serializer.RegisterType(typeof(DummyMessage));
+        second.Serializer.RegisterType(typeof(DummyMessage));
+        
         var connection = second.CreateConnection(IPEndPoint.Parse($"127.0.0.1:{port}"));
         await UpdateManagers(first, second);
         
@@ -65,15 +68,13 @@ public class ConnectionManagerTests
     
     [Theory]
     [InlineData(64, true)]
-    [InlineData(1024, true)]
-    [InlineData(1024 * 1024, true)] // 1 MB, should be fragmented
+    [InlineData(48000, true)] // first size that will be fragmented
+    [InlineData(1024 * 1024 + 1, true)] // Weird size that will be fragmented
     [InlineData(1024 * 1024 * 16, false)] // Over the default MTU
-    public async Task ConnectionManagerShouldSendPacket(int packetSize, bool shouldPass)
+    public async Task ConnectionShouldSendReliableMessage(int packetSize, bool shouldPass)
     {
         // Arrange
         var (first, second, connection) = await GetConnectedManagers();
-        first.Serializer.RegisterType(typeof(DummyMessage));
-        second.Serializer.RegisterType(typeof(DummyMessage));
         var connection2 = first.Connections.First();
 
         // Act
@@ -93,5 +94,37 @@ public class ConnectionManagerTests
         var receivedMessage = connection2.IncomingMessages.FirstOrDefault();
         var receivedContent = (DummyMessage) receivedMessage.Content;
         Assert.Equal(shouldPass, receivedContent == messageContent);
+    }
+    
+    [Theory]
+    [InlineData(0.0f)]
+    [InlineData(0.1f)]
+    [InlineData(0.2f)]
+    [InlineData(0.3f)]
+    public async Task ConnectionShouldSendReliableMessageWithPacketLoss(float packetLoss)
+    {
+        // Arrange
+        var (first, second, connection) = await GetConnectedManagers();
+        first.Settings.SimulatedPacketLoss = packetLoss;
+        first.Settings.MaxBytesSentPerUpdate = 1024 * 128; //small packet size to make sure we don't send all packets in one update
+        second.Settings = first.Settings;
+        var connection2 = first.Connections.First();
+
+        // Act
+        DummyMessage messageContent = new DummyMessage(1024*1024*2);
+        var message = connection.EnqueueMessage(MessageType.Reliable, 1000, messageContent);
+        int maxUpdates = 0;
+        while (!(message.State == MessageState.Failed || message.State == MessageState.Delivered) && maxUpdates < 10)
+        {
+            Log.Debug("Loop {0}", maxUpdates);
+            await UpdateManagers(first, second);
+            maxUpdates++;
+        }
+
+        // Assert
+        var receivedMessage = connection2.IncomingMessages.First();
+        var receivedContent = (DummyMessage) receivedMessage.Content;
+        Assert.True(receivedContent == messageContent);
+        Assert.True(message.State == MessageState.Delivered);
     }
 }

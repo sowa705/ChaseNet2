@@ -35,7 +35,7 @@ namespace ChaseNet2.Transport
         /// </summary>
         public float TargetUpdateRate { get; set; } = 30;
         
-        public TransportSettings Settings { get; private set; }
+        public TransportSettings Settings { get; set; }
 
         int tickCount = 0;
         
@@ -317,7 +317,14 @@ namespace ChaseNet2.Transport
             BitConverter.GetBytes(connectionId).CopyTo(data, 0);
             array.CopyTo(data, 8);
             
-            _client.Send(data, data.Length, remoteEndpoint);
+            if (rng.NextDouble() >= Settings.SimulatedPacketLoss)
+            {
+                _client.Send(data, data.Length, remoteEndpoint);
+            }
+            else
+            {
+                Log.Logger.Warning("Dropping packet to {EndPoint}", remoteEndpoint);
+            }
             
             Statistics.BytesSent += data.Length;
             Statistics.PacketsSent ++;
