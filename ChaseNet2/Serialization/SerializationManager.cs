@@ -49,6 +49,7 @@ namespace ChaseNet2.Serialization
             RegisterType(typeof(Ack));
             RegisterType(typeof(Ping));
             RegisterType(typeof(Pong));
+            RegisterType(typeof(SplitMessagePart));
             
             RegisterType(typeof(JoinSession));
             RegisterType(typeof(JoinSessionResponse));
@@ -58,8 +59,9 @@ namespace ChaseNet2.Serialization
         /// <summary>
         /// Writes an object to the binary writer, fails if the object does not implement IStreamSerializable or is not registered, returns written bytes
         /// </summary>
-        public int Serialize<T>(T obj,BinaryWriter writer)
+        public byte[] Serialize<T>(T obj)
         {
+            BinaryWriter writer = new BinaryWriter(new MemoryStream());
             var type = obj.GetType();
             var id = TypeIDs.FirstOrDefault(x => x.Value == type).Key;
 
@@ -70,25 +72,29 @@ namespace ChaseNet2.Serialization
             // write type ID
             writer.Write(BitConverter.GetBytes(id));
             // write data
-            if (CopyMode)
+            
+            using var ms = new MemoryStream();
+            using var bw = new BinaryWriter(ms);
+            var writtenBytes = ((IStreamSerializable)obj).Serialize(bw);
+                
+            var data = ms.ToArray();
+            writer.Write(data.Length);
+            writer.Write(data);
+
+            if (writtenBytes!= data.Length)
             {
-                using var ms = new MemoryStream();
-                using var bw = new BinaryWriter(ms);
-                var writtenBytes = ((IStreamSerializable)obj).Serialize(bw);
-                
-                var data = ms.ToArray();
-                writer.Write(data.Length);
-                writer.Write(data);
-
-                if (writtenBytes!= data.Length)
-                {
-                    throw new Exception("Written byte count does not match actual length for type " + type.FullName);
-                }
-                
-                return data.Length + sizeof(ulong) + sizeof(int);
+                throw new Exception("Written byte count does not match actual length for type " + type.FullName);
             }
+                
+            return ((MemoryStream)writer.BaseStream).ToArray();
+        }
 
-            return (obj as IStreamSerializable)!.Serialize(writer)+sizeof(ulong); //message+8 bytes for type ID
+        public object Deserialize(byte[] data)
+        {
+            using var ms = new MemoryStream(data);
+            using var br = new BinaryReader(ms);
+
+            return Deserialize(br);
         }
         
         public object Deserialize(BinaryReader reader)

@@ -8,6 +8,7 @@ using System.Net;
 using System.Security.Cryptography;
 using System.Text;
 using System.Threading.Tasks;
+using ChaseNet2.Extensions;
 using ChaseNet2.Transport.Messages;
 using Org.BouncyCastle.Crypto;
 using Serilog;
@@ -29,7 +30,10 @@ namespace ChaseNet2.Transport
         public ConcurrentQueue<NetworkMessage> IncomingMessages { get; private set; }
         ConcurrentQueue<NetworkMessage> OutgoingMessages { get; set; }
         
-        List<SentMessage> _trackedSentMessages;
+        Dictionary<ulong,SentMessage> _trackedSentMessages;
+        // Messages that are waiting for other parts to arrive
+        Dictionary<ulong,SplitReceivedMessage> _splitReceivedMessages;
+        
         LinkedList<ulong> _ReceivedMessageIds;
         
         
@@ -66,7 +70,8 @@ namespace ChaseNet2.Transport
             OutgoingMessages = new ConcurrentQueue<NetworkMessage>();
             MessageHandlers = new Dictionary<ulong, IMessageHandler>();
             
-            _trackedSentMessages = new List<SentMessage>();
+            _trackedSentMessages = new Dictionary<ulong,SentMessage>();
+            _splitReceivedMessages = new Dictionary<ulong, SplitReceivedMessage>();
             _ReceivedMessageIds = new LinkedList<ulong>();
             
             LastPing = DateTime.UtcNow;
@@ -92,7 +97,7 @@ namespace ChaseNet2.Transport
             
             if (message.Type==MessageType.Reliable) //we need to track this message for later
             {
-                _trackedSentMessages.Add(new SentMessage(message));
+                _trackedSentMessages.Add(message.ID,new SentMessage(message));
             }
             
             return message;
@@ -111,7 +116,7 @@ namespace ChaseNet2.Transport
         public async Task<bool> WaitForDeliveryAsync(NetworkMessage message)
         {
             // get the message from the list of tracked messages
-            var sentMessage = _trackedSentMessages.First(x=>x.Message.ID==message.ID);
+            var sentMessage = _trackedSentMessages[message.ID];
 
             // wait for the message to be delivered
             sentMessage.DeliveryTask=new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -143,7 +148,7 @@ namespace ChaseNet2.Transport
 
             ConnectionRequest request = new ConnectionRequest() {PublicKey = _manager.PublicKey, ConnectionId = ConnectionId};
             
-            _manager.Serializer.Serialize(request,writer);
+            writer.Write(_manager.Serializer.Serialize(request));
 
             _manager.SendPacket(((MemoryStream)writer.BaseStream).ToArray(), RemoteEndpoint, 0xADDDDDDDD);
         }
@@ -154,7 +159,7 @@ namespace ChaseNet2.Transport
 
             ConnectionResponse request = new ConnectionResponse() {PublicKey = _manager.PublicKey, Accepted = true, ConnectionId = ConnectionId};
             
-            _manager.Serializer.Serialize(request,writer);
+            writer.Write(_manager.Serializer.Serialize(request));
 
             _manager.SendPacket(((MemoryStream)writer.BaseStream).ToArray(), RemoteEndpoint, 0xBDDDDDDDD);
         }
@@ -212,38 +217,54 @@ namespace ChaseNet2.Transport
                     var messageID = reader.ReadUInt64();
                     var channelID = reader.ReadUInt64();
                     var messageType = (MessageType) reader.ReadByte();
-                    var messageContent = _manager.Serializer.Deserialize(reader);
+                    object messageContent;
+                    try
+                    {
+                        messageContent = _manager.Serializer.Deserialize(reader);
+                    }
+                    catch (Exception e)
+                    {
+                        Log.Logger.Warning("Failed to deserialize message {messageID} ({e})",messageID,e);
+                        break;
+                    }
+                    
                     
                     var message = new NetworkMessage(messageID, channelID, messageType, messageContent);
-                    message.State = MessageState.Received;
-
-                    if (_ReceivedMessageIds.Contains(messageID))
-                    {
-                        Log.Logger.Warning("Received a duplicate message {messageID}",messageID);
-                        continue;
-                    }
-                    
-                    _ReceivedMessageIds.AddLast(messageID);
-                    
-                    Log.Logger.Debug("Received message {MessageID} on channel {ChannelID} of type {MessageType} with content {Content}",messageID,channelID,messageType,messageContent.GetType());
-                    
-                    if (messageType.HasFlag(MessageType.Reliable)) //we need to acknowledge this message
-                    {
-                        EnqueueInternalMessage(MessageType.Unreliable, new Ack() { MessageID = messageID });
-                    }
-
-                    if (MessageHandlers.ContainsKey(channelID))
-                    {
-                        MessageHandlers[channelID].HandleMessage(this, message);
-                    }
-                    else
-                    {
-                        IncomingMessages.Enqueue(message);
-                    }
+                    RouteReceivedMessage(message);
                 }
             }
             catch(EndOfStreamException e)
             {
+            }
+        }
+
+        private void RouteReceivedMessage(NetworkMessage message)
+        {
+            message.State = MessageState.Received;
+
+            if (_ReceivedMessageIds.Contains(message.ID))
+            {
+                Log.Logger.Warning("Received a duplicate message {messageID}", message.ID);
+                return;
+            }
+
+            _ReceivedMessageIds.AddLast(message.ID);
+
+            Log.Logger.Debug("Received message {MessageID} on channel {ChannelID} of type {MessageType} with content {Content}",
+                message.ID, message.ChannelID, message.Type, message.Content.GetType());
+
+            if (message.Type.HasFlag(MessageType.Reliable)) //we need to acknowledge this message
+            {
+                EnqueueInternalMessage(MessageType.Unreliable, new Ack() { MessageID = message.ID });
+            }
+
+            if (MessageHandlers.ContainsKey(message.ChannelID))
+            {
+                MessageHandlers[message.ChannelID].HandleMessage(this, message);
+            }
+            else
+            {
+                IncomingMessages.Enqueue(message);
             }
         }
 
@@ -280,32 +301,44 @@ namespace ChaseNet2.Transport
 
             foreach (var msg in _trackedSentMessages)
             {
-                if (msg.Message.State==MessageState.Sent && DateTime.UtcNow>msg.LastSent+GetResendInterval())
+                if (msg.Value.Message.State==MessageState.Sent && DateTime.UtcNow>msg.Value.LastSent+GetResendInterval() && !msg.Value.IsSplit)
                 {
-                    if (msg.ResendCount>3) //failed to deliver message
+                    if (msg.Value.ResendCount>3) //failed to deliver message
                     {
-                        msg.Message.State = MessageState.Failed;
-                        Log.Information("Failed to deliver message {MessageID}",msg.Message.ID);
-                        msg.DeliveryTask?.SetResult(false);
+                        msg.Value.Message.State = MessageState.Failed;
+                        Log.Information("Failed to deliver message {MessageID}",msg.Value.Message.ID);
+                        msg.Value.DeliveryTask?.SetResult(false);
                         continue;
                     }
-                    Log.Warning("Resending message {MessageID}",msg.Message.ID);
+                    Log.Warning("Resending message {MessageID}",msg.Value.Message.ID);
                     // resend the message
-                    msg.LastSent=DateTime.UtcNow;
-                    msg.ResendCount++;
-                    OutgoingMessages.Enqueue(msg.Message);
+                    msg.Value.LastSent=DateTime.UtcNow;
+                    msg.Value.ResendCount++;
+                    OutgoingMessages.Enqueue(msg.Value.Message);
+                }
+
+                if (msg.Value.IsSplit && msg.Value.Message.State == MessageState.Sent)
+                {
+                    // failed to deliver a split message
+                    if (DateTime.UtcNow>msg.Value.LastSent+(GetResendInterval()*8) && msg.Value.SentFragmentMessages.Any(x => x.State!=MessageState.Delivered))
+                    {
+                        msg.Value.Message.State = MessageState.Failed;
+                        Log.Information("Failed to deliver split message {MessageID}",msg.Value.Message.ID);
+                        msg.Value.DeliveryTask?.SetResult(false);
+                        continue;
+                    }
                 }
             }
             
             // clean up old message ids
-            while (_ReceivedMessageIds.Count>200)
+            while (_ReceivedMessageIds.Count>300)
             {
                 _ReceivedMessageIds.RemoveFirst();
             }
             
             // remove messages that have been delivered or failed
             
-            _trackedSentMessages.RemoveAll(m => m.Message.State == MessageState.Delivered || m.Message.State == MessageState.Failed);
+            _trackedSentMessages.RemoveAll((k,v) => v.Message.State == MessageState.Delivered || v.Message.State == MessageState.Failed);
             
             // send messages
             SendMessages();
@@ -317,16 +350,17 @@ namespace ChaseNet2.Transport
         /// <returns></returns>
         public TimeSpan GetResendInterval()
         {
-            var resendInterval = (int) (AveragePing * 3f); //rtt + some extra time
+            var resendInterval = (int) (AveragePing * 3.5f); //rtt + some extra time
             
-            resendInterval = Math.Clamp(resendInterval, 80, 500); // clamp to reasonable values
+            resendInterval = Math.Clamp(resendInterval, 120, 500); // clamp to reasonable values
             
             return TimeSpan.FromMilliseconds(resendInterval);
         }
 
         private void SendMessages()
         {
-            while (!OutgoingMessages.IsEmpty)
+            int totalBytesSent = 0;
+            while (!OutgoingMessages.IsEmpty&&totalBytesSent<_manager.Settings.MaxBytesSentPerUpdate)
             {
                 if (PeerPublicKey==null)
                 {
@@ -348,19 +382,58 @@ namespace ChaseNet2.Transport
                 writer.Write(0x12345678);
                 
                 // write messages until we run out of space or packets
-                var maxPacketSize = 32768; //intentionally small to account for potential overhead
+                var maxPacketSize = 60000; //intentionally small to account for potential overhead
+                
+                int packetCount = 0;
                 
                 var currentPacketSize = 16+4; //initialization vector + preamble
                 while (!OutgoingMessages.IsEmpty && currentPacketSize < maxPacketSize)
                 {
                     OutgoingMessages.TryDequeue(out var message);
+
+                    if (message.State == MessageState.Delivered || message.State == MessageState.Failed)
+                    {
+                        continue;
+                    }
+                    
+                    var serializedMessage = _manager.Serializer.Serialize(message.Content);
+                    int contentSize = serializedMessage.Length;
+                    
+                    if (contentSize>48000)
+                    {
+                        if (contentSize>_manager.Settings.MaxMessageLength)
+                        {
+                            Log.Logger.Error("Message size {Size} above the max setting {MaxSize}", contentSize, _manager.Settings.MaxMessageLength);
+                            message.State = MessageState.Failed;
+                            continue;
+                        }
+                        Log.Logger.Information("Message {MessageID} is Larger than the MTU. Splitting...", message.ID);
+                        
+                        SplitMessage(message, serializedMessage);
+                        break;
+                    }
+                    
+                    if (contentSize+currentPacketSize>maxPacketSize)
+                    {
+                        OutgoingMessages.Enqueue(message);
+                        break;
+                    }
+                    
                     writer.Write(message.ID);
                     writer.Write(message.ChannelID);
                     writer.Write((byte) message.Type);
-                    int contentSize=_manager.Serializer.Serialize(message.Content,writer);
+                    writer.Write(serializedMessage);
+                    packetCount++;
                     
                     message.State = MessageState.Sent;
                     
+                    totalBytesSent += contentSize+16+4+4+1; // message id + channel id + message type + content size
+
+                    if (message.Type.HasFlag(MessageType.Reliable))
+                    {
+                        _trackedSentMessages[message.ID].LastSent = DateTime.UtcNow;
+                    }
+
                     Log.Debug("Sending message {MessageID} on channel {ChannelID} of type {MessageType} with content {Content}",message.ID,message.ChannelID,message.Type,message.Content.GetType());
 
                     currentPacketSize += 4 + 1 + contentSize; //messageID + messageType + content
@@ -371,8 +444,37 @@ namespace ChaseNet2.Transport
                 //ds.Flush();
                 cs.FlushFinalBlock();
                 ms.Flush();
+                
+                Log.Debug("Sending packet with {PacketCount} messages with size of {Size}",packetCount,ms.Length);
+                
                 // send the packet
                 _manager.SendPacket(ms.ToArray(), RemoteEndpoint, ConnectionId);
+            }
+        }
+
+        private void SplitMessage(NetworkMessage message, byte[] serializedMessage)
+        {
+            int contentSize = serializedMessage.Length;
+            _trackedSentMessages[message.ID].IsSplit = true;
+
+            for (int i = 0; i < contentSize; i += 32768)
+            {
+                SplitMessagePart part = new SplitMessagePart()
+                {
+                    OriginalMessageId = message.ID,
+                    OriginalMessageType = message.Type,
+                    TotalParts = (contentSize / 32768) + 1,
+                    PartNumber = i / 32768,
+                    PartSize = 32768,
+                    Data = serializedMessage.Skip(i).Take(32768).ToArray()
+                };
+
+                var enqueuedMsg = EnqueueInternalMessage(message.Type, part);
+
+                if (message.Type.HasFlag(MessageType.Reliable))
+                {
+                    _trackedSentMessages[message.ID].SentFragmentMessages.Add(enqueuedMsg);
+                }
             }
         }
 

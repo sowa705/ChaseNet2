@@ -14,12 +14,20 @@ namespace ChaseNet2.Transport
                 switch (message.Content)
                 {
                     case Ack ack:
-                        var sentMessage = connection._trackedSentMessages.Find(m => m.Message.ID == ack.MessageID);
+                        var sentMessage = connection._trackedSentMessages[ack.MessageID];
                         if (sentMessage != null)
                         {
                             if (sentMessage.Message.State == MessageState.Delivered)
                             {
                                 return;
+                            }
+
+                            if (sentMessage.IsSplit)
+                            {
+                                foreach (var fragment in sentMessage.SentFragmentMessages)
+                                {
+                                    fragment.State = MessageState.Delivered;
+                                }
                             }
                             sentMessage.Message.State = MessageState.Delivered;
                             if (sentMessage.DeliveryTask!=null)
@@ -45,6 +53,24 @@ namespace ChaseNet2.Transport
                             connection.LastReceivedPong = DateTime.UtcNow;
                                     
                             connection.State = ConnectionState.Connected; // ping came back so obviously we are connected
+                        }
+                        break;
+                    case SplitMessagePart splitMessagePart:
+                        if (!connection._splitReceivedMessages.ContainsKey(splitMessagePart.OriginalMessageId))
+                        {
+                            connection._splitReceivedMessages.Add(splitMessagePart.OriginalMessageId, new SplitReceivedMessage(splitMessagePart));
+                        }
+                        
+                        var splitMessage = connection._splitReceivedMessages[splitMessagePart.OriginalMessageId];
+                        Log.Debug("Added part {part} of {total} to split message {id}", splitMessagePart.PartNumber, splitMessagePart.TotalParts, splitMessagePart.OriginalMessageId);
+                        splitMessage.AddPart(splitMessagePart);
+
+                        if (splitMessage.IsComplete())
+                        {
+                            Log.Debug("Split message complete");
+                            var networkMessage = splitMessage.GetCompleteMessage(connection._manager.Serializer);
+                            
+                            connection.RouteReceivedMessage(networkMessage);
                         }
                         break;
                     default:

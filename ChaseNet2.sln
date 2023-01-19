@@ -8,6 +8,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ChaseNet2.FileTransfer", "C
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ChaseNet2.SimpleTracker", "ChaseNet2.SimpleTracker\ChaseNet2.SimpleTracker.csproj", "{351E30D1-26E4-4CC9-8673-9207614BD98B}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ChaseNet2.Tests", "ChaseNet2.Tests\ChaseNet2.Tests.csproj", "{3A6FCAAC-636F-433F-9C21-F936EA374181}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -30,5 +32,9 @@ Global
 		{351E30D1-26E4-4CC9-8673-9207614BD98B}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{351E30D1-26E4-4CC9-8673-9207614BD98B}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{351E30D1-26E4-4CC9-8673-9207614BD98B}.Release|Any CPU.Build.0 = Release|Any CPU
+		{3A6FCAAC-636F-433F-9C21-F936EA374181}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{3A6FCAAC-636F-433F-9C21-F936EA374181}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{3A6FCAAC-636F-433F-9C21-F936EA374181}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{3A6FCAAC-636F-433F-9C21-F936EA374181}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal

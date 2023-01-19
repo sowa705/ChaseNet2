@@ -34,18 +34,27 @@ namespace ChaseNet2.Transport
         /// Recommended value on tracker servers is 20, clients can use 60-120.
         /// </summary>
         public float TargetUpdateRate { get; set; } = 30;
+        
+        public TransportSettings Settings { get; private set; }
 
         int tickCount = 0;
         
         long lastSentBytes = 0;
-        long lastReceivedBytes = 0;
+        private long lastReceivedBytes = 0;
 
-        public ConnectionManager(int? port = null)
+        public ConnectionManager(int? port = null) : this(new TransportSettings(), port)
         {
+        }
+        
+        public ConnectionManager(TransportSettings settings, int? port = null)
+        {
+            Settings = settings;
+
             _keyPair = CryptoHelper.GenerateKeyPair();
 
             _client = port == null ? new UdpClient() : new UdpClient(port.Value);
-
+            _client.Client.ReceiveBufferSize = Settings.ReceiveBufferSize;
+            
             Connections = new List<Connection>();
             Handlers = new List<ConnectionHandler>();
 
@@ -214,6 +223,7 @@ namespace ChaseNet2.Transport
 
                         if (Connections.Find(x => x.ConnectionId == request.ConnectionId) != null)
                         {
+                            Log.Logger.Warning("Connection with id {0} already exists, rejecting connection request", request.ConnectionId);
                             return;
                         }
 
@@ -232,6 +242,10 @@ namespace ChaseNet2.Transport
                     {
                         Log.Logger.Warning("Failed to deserialize connection request from {EndPoint}", remoteEP);
                     }
+                }
+                else
+                {
+                    Log.Logger.Warning("Received connection request from {EndPoint} but new connections are not accepted", remoteEP);
                 }
                 return;
             }

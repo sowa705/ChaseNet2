@@ -13,7 +13,7 @@
 
     <ItemGroup>
       <PackageReference Include="Serilog" Version="2.12.0" />
-      <PackageReference Include="Serilog.Sinks.Console" Version="4.1.1-dev-00901" />
+      <PackageReference Include="Serilog.Sinks.Console" Version="4.1.0" />
     </ItemGroup>
 
 </Project>
