@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using ChaseNet2.Extensions;
 using ChaseNet2.Serialization;
 using ProtoBuf;
+using Serilog;
 
 [ProtoContract]
 public class FileSpec
@@ -20,7 +21,7 @@ public class FileSpec
 
         //prepare parts
 
-        FileStream fs = new FileStream(path, FileMode.Open);
+        using FileStream fs = new FileStream(path, FileMode.Open);
 
         var parts = new List<FilePartSpec>();
         spec.Parts = parts;
@@ -30,6 +31,7 @@ public class FileSpec
 
         while (fs.Position < fs.Length)
         {
+            Log.Information("Creating file spec part {part} of {total}", parts.Count + 1, (int)Math.Ceiling((double)fs.Length / partSize));
             var part = new FilePartSpec();
             part.Offset = fs.Position;
             part.Size = Math.Min(partSize, fs.Length - fs.Position);

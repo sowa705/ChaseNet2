@@ -15,7 +15,7 @@ namespace ChaseNet2.Transport
         /// <summary>
         /// Throttles the number of messages sent per network tick.
         /// </summary>
-        public int MaxBytesSentPerUpdate { get; set; } = 1024 * 1024 * 2;
+        public int MaxBytesSentPerUpdate { get; set; } = 1024 * 1024 * 4;
 
         /// <summary>
         /// Max size of a UDP packet sent over the network.

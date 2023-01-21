@@ -24,10 +24,4 @@
       <ProjectReference Include="..\ChaseNet2\ChaseNet2.csproj" />
     </ItemGroup>
 
-    <ItemGroup>
-      <None Update="dummyFile.bin">
-        <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-      </None>
-    </ItemGroup>
-
 </Project>

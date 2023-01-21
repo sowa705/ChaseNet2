@@ -1,3 +1,4 @@
+using System.Net;
 using System.Security.Cryptography;
 using ChaseNet2.Transport;
 using Newtonsoft.Json;
@@ -31,7 +32,7 @@ public class FileClient : ConnectionHandler
             switch (message.Content)
             {
                 case FileSpec fileSpec:
-                    Log.Information("Received file spec from {Connection}", connection.ConnectionId);
+                    Log.Debug("Received file spec from {Connection}", connection.ConnectionId);
                     if (DiscoveredFiles.All(x => x.Item2.FileName != fileSpec.FileName))
                     {
                         DiscoveredFiles.Add((connection, fileSpec));
@@ -43,13 +44,13 @@ public class FileClient : ConnectionHandler
             }
         }
     }
-
+    
     private void HandleFilePartResponse(FilePartResponse filePartResponse)
     {
         var receivedHash = SHA256.Create().ComputeHash(filePartResponse.Data);
         var specHash = CurrentTransfer.FileSpec.Parts.First(x=>x.Offset == filePartResponse.Offset).Hash;
-
-        if (!receivedHash.Equals(specHash))
+        
+        if (!receivedHash.SequenceEqual(specHash))
         {
             Log.Error("Received file part with invalid hash");
             return;

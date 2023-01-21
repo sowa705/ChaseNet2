@@ -255,7 +255,7 @@ namespace ChaseNet2.Transport
 
             if (_ReceivedMessageIds.Contains(message.ID))
             {
-                Log.Logger.Warning("Received a duplicate message {messageID}", message.ID);
+                Log.Logger.Debug("Received a duplicate message {messageID}", message.ID);
                 return;
             }
 
@@ -302,7 +302,7 @@ namespace ChaseNet2.Transport
                 EnqueueInternalMessage(MessageType.Priority, p);
             }
 
-            if (LastReceivedPong + TimeSpan.FromSeconds(10) < DateTime.UtcNow && (State != ConnectionState.Started || State != ConnectionState.Disconnected))
+            if (LastReceivedPong + TimeSpan.FromSeconds(10) < DateTime.UtcNow && (State != ConnectionState.Started && State != ConnectionState.Disconnected))
             {
                 Log.Logger.Warning("Lost connection {0}, trying to reconnect", ConnectionId);
                 State = ConnectionState.Disconnected; // we haven't received a pong in 5 seconds so we are probably disconnected
@@ -317,11 +317,11 @@ namespace ChaseNet2.Transport
                     if (msg.Value.ResendCount > 3) //failed to deliver message
                     {
                         msg.Value.Message.State = MessageState.Failed;
-                        Log.Information("Failed to deliver message {MessageID}", msg.Value.Message.ID);
+                        Log.Debug("Failed to deliver message {MessageID}", msg.Value.Message.ID);
                         msg.Value.DeliveryTask?.SetResult(false);
                         continue;
                     }
-                    Log.Warning("Resending message {MessageID}", msg.Value.Message.ID);
+                    Log.Debug("Resending message {MessageID}", msg.Value.Message.ID);
                     // resend the message
                     msg.Value.LastSent = DateTime.UtcNow;
                     msg.Value.ResendCount++;
@@ -334,7 +334,7 @@ namespace ChaseNet2.Transport
                     if (DateTime.UtcNow > msg.Value.LastSent + (GetResendInterval(msg.Value.Message.Type) * 6) && msg.Value.SentFragmentMessages.Any(x => x.State != MessageState.Delivered))
                     {
                         msg.Value.Message.State = MessageState.Failed;
-                        Log.Information("Failed to deliver split message {MessageID}", msg.Value.Message.ID);
+                        Log.Debug("Failed to deliver split message {MessageID}", msg.Value.Message.ID);
                         msg.Value.DeliveryTask?.SetResult(false);
                         continue;
                     }

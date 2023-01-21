@@ -63,7 +63,6 @@ public class Program
             }
         }
     }
-
     private static async Task InitNetwork(string trackerEP)
     {
         Manager = new ConnectionManager();
@@ -93,7 +92,7 @@ public class Program
     private static void InitLogger()
     {
         Logger logger = new LoggerConfiguration()
-            .MinimumLevel.Debug()
+            .MinimumLevel.Information()
             .WriteTo.Console()
             .CreateLogger();
 

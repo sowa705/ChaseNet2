@@ -15,11 +15,16 @@ public class FileTransfer
     public FileTransfer(ITestOutputHelper output)
     {
         Logger logger = new LoggerConfiguration()
-            .MinimumLevel.Debug()
+            .MinimumLevel.Information()
             .WriteTo.TestOutput(output, LogEventLevel.Debug)
             .CreateLogger();
 
         Log.Logger = logger;
+        
+        //Create a dummy file to transfer
+        var bytes = new byte[20670537]; //20MB but a weird number
+        new Random().NextBytes(bytes);
+        File.WriteAllBytes("test.bin", bytes);
     }
 
     void RegisterTypes(ConnectionManager cm)
@@ -49,7 +54,7 @@ public class FileTransfer
         var hostTrackerConnection = hostCM.CreateConnection(IPEndPoint.Parse("127.0.0.1:" + trackerPort));
         var hostSession = new SessionClient("TrackerSession", hostCM, hostTrackerConnection);
         hostSession.Connect();
-        var host = new FileHost("dummyFile.bin");
+        var host = new FileHost("test.bin");
         hostCM.AttachHandler(host);
         
         // create file client

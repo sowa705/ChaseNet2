@@ -68,15 +68,18 @@ public class FileHost : ConnectionHandler, IMessageHandler
                 part.FileName = Spec.FileName;
                 part.Offset = request.Offset;
 
-                var buffer = new byte[request.Length];
+                long totalFileSize = Spec.Parts.Sum(x => x.Size);
+                int length = Math.Min(Spec.PartSize, (int)(totalFileSize - request.Offset));
+
+                var buffer = new byte[length];
 
                 Stream.Seek(request.Offset, SeekOrigin.Begin);
-                Stream.Read(buffer, 0, request.Length);
+                Stream.Read(buffer, 0, length);
 
                 part.Data = buffer;
 
                 connection.EnqueueMessage(MessageType.Reliable, 997, part);
-                Log.Information("Sent {0} bytes at offset {1} of file {2} to client", request.Length, request.Offset, Spec.FileName);
+                Log.Information("Sent {0} bytes at offset {1} of file {2} to client", length, request.Offset, Spec.FileName);
                 break;
         }
     }
