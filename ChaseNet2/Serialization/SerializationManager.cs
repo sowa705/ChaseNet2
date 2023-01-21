@@ -2,11 +2,15 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Runtime.Serialization.Formatters.Binary;
+using System.Net;
+using System.Reflection;
 using System.Security.Cryptography;
 using System.Text;
 using ChaseNet2.Session.Messages;
 using ChaseNet2.Transport.Messages;
+using Org.BouncyCastle.Crypto;
+using ProtoBuf;
+using ProtoBuf.Meta;
 using Serilog;
 
 namespace ChaseNet2.Serialization
@@ -14,30 +18,31 @@ namespace ChaseNet2.Serialization
     public class SerializationManager
     {
         Dictionary<ulong, Type> TypeIDs = new Dictionary<ulong, Type>();
-        
-        /// <summary>
-        /// Copies the data to an array when writing to ensure the length is correct.
-        /// This is a bit slower but provides useful information for debugging
-        /// </summary>
-        public bool CopyMode = true;
-        
-        public ulong RegisterType(Type type, bool useFullName=true)
+        public static bool SurrogatesRegistered = false;
+
+        public ulong RegisterType<T>(bool useFullName = true)
         {
-            if (!typeof(IStreamSerializable).IsAssignableFrom(type))
+            var type = typeof(T);
+            return RegisterType(type, useFullName);
+        }
+
+        public ulong RegisterType(Type type, bool useFullName = true)
+        {
+            if (type.GetCustomAttribute<ProtoContractAttribute>() == null)
             {
-                throw new ArgumentException("Type must implement IStreamSerializable", "type");
+                throw new ArgumentException("Type must have the ProtoContract attribute");
             }
-            
+
             string name = type.FullName;
             if (!useFullName)
                 name = type.Name;
-            
+
             // compute unique ID with sha1
-            var bytes=SHA1.Create().ComputeHash(Encoding.UTF8.GetBytes(name));
-            
-            var id=BitConverter.ToUInt64(bytes, 0); // first 8 bytes of sha1 hash, should be unique enough
-           // Console.WriteLine("Registering type {0} with ID {1}", name, id);
-            
+            var bytes = SHA256.Create().ComputeHash(Encoding.UTF8.GetBytes(name));
+
+            var id = BitConverter.ToUInt64(bytes, 0); // first 8 bytes of sha256 hash, should be unique enough
+                                                      // Console.WriteLine("Registering type {0} with ID {1}", name, id);
+
             TypeIDs.Add(id, type);
             return id;
         }
@@ -49,81 +54,81 @@ namespace ChaseNet2.Serialization
             RegisterType(typeof(Ack));
             RegisterType(typeof(Ping));
             RegisterType(typeof(Pong));
-            
+            RegisterType(typeof(SplitMessagePart));
+
             RegisterType(typeof(JoinSession));
             RegisterType(typeof(JoinSessionResponse));
             RegisterType(typeof(SessionUpdate));
+
+            if (SurrogatesRegistered)
+                return;
+
+            RuntimeTypeModel.Default.Add<AsymmetricKeyParameter>().SetSurrogate(typeof(AsymmetricKeyParameterSurrogate));
+            RuntimeTypeModel.Default.Add<IPEndPoint>().SetSurrogate(typeof(IPEndPointSurrogate));
+
+            SurrogatesRegistered = true;
         }
-        
+
         /// <summary>
         /// Writes an object to the binary writer, fails if the object does not implement IStreamSerializable or is not registered, returns written bytes
         /// </summary>
-        public int Serialize<T>(T obj,BinaryWriter writer)
+        public byte[] Serialize<T>(T obj)
         {
+            BinaryWriter writer = new BinaryWriter(new MemoryStream());
             var type = obj.GetType();
             var id = TypeIDs.FirstOrDefault(x => x.Value == type).Key;
 
-            if (id==0)
+            if (id == 0)
             {
-                id=RegisterType(obj.GetType());
+                id = RegisterType(obj.GetType());
             }
             // write type ID
             writer.Write(BitConverter.GetBytes(id));
+
             // write data
-            if (CopyMode)
-            {
-                using var ms = new MemoryStream();
-                using var bw = new BinaryWriter(ms);
-                var writtenBytes = ((IStreamSerializable)obj).Serialize(bw);
-                
-                var data = ms.ToArray();
-                writer.Write(data.Length);
-                writer.Write(data);
+            var protostream = new MemoryStream();
+            ProtoBuf.Serializer.Serialize(protostream, obj);
 
-                if (writtenBytes!= data.Length)
-                {
-                    throw new Exception("Written byte count does not match actual length for type " + type.FullName);
-                }
-                
-                return data.Length + sizeof(ulong) + sizeof(int);
-            }
+            var data = protostream.ToArray();
+            writer.Write(data.Length);
+            writer.Write(data);
 
-            return (obj as IStreamSerializable)!.Serialize(writer)+sizeof(ulong); //message+8 bytes for type ID
+            return ((MemoryStream)writer.BaseStream).ToArray();
         }
-        
+
+        public object Deserialize(byte[] data)
+        {
+            using var ms = new MemoryStream(data);
+            using var br = new BinaryReader(ms);
+
+            return Deserialize(br);
+        }
+
         public object Deserialize(BinaryReader reader)
         {
             // read type ID
-            var id=BitConverter.ToUInt64(reader.ReadBytes(8), 0);
-            var type = TypeIDs[id];
-            // read data
-            var obj = Activator.CreateInstance(type);
-            
-            if (CopyMode)
-            {
-                var length = reader.ReadInt32();
-                var data = reader.ReadBytes(length);
-                
-                using var ms = new MemoryStream(data);
-                using var br = new BinaryReader(ms);
+            var id = BitConverter.ToUInt64(reader.ReadBytes(8), 0);
 
-                try
-                {
-                    ((IStreamSerializable)obj).Deserialize(br);
-                }
-                catch (Exception e)
-                {
-                    Log.Logger.Error("Error deserializing type {0} with ID {1} because of {2}", type.FullName, id, e.Message);
-                    throw;
-                }
-                
-                return obj;
+            if (!TypeIDs.ContainsKey(id))
+            {
+                throw new Exception("Cannot deserialize object with an unknown type ID " + id);
             }
-            
-            (obj as IStreamSerializable)!.Deserialize(reader);
+
+            var type = TypeIDs[id];
+
+            var length = reader.ReadInt32();
+            var data = reader.ReadBytes(length);
+
+            var obj = ProtoBuf.Serializer.Deserialize(type, new MemoryStream(data));
+
+            if (obj is null)
+            {
+                throw new Exception("Failed to deserialize type " + type.FullName);
+            }
+
             return obj;
         }
-        
+
         public T Deserialize<T>(BinaryReader reader) where T : class
         {
             return Deserialize(reader) as T;

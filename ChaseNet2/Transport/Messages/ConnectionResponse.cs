@@ -1,31 +1,21 @@
+using System;
 using System.IO;
 using System.Security.Cryptography;
 using ChaseNet2.Serialization;
 using Org.BouncyCastle.Crypto;
+using Org.BouncyCastle.Security;
+using ProtoBuf;
 
 namespace ChaseNet2.Transport.Messages
 {
-    public class ConnectionResponse : IStreamSerializable
+    [ProtoContract]
+    public class ConnectionResponse
     {
+        [ProtoMember(1)]
         public bool Accepted { get; set; }
+        [ProtoMember(2)]
         public ulong ConnectionId { get; set; }
+        [ProtoMember(3)]
         public AsymmetricKeyParameter PublicKey { get; set; }
-        public int Serialize(BinaryWriter writer)
-        {
-            writer.Write(Accepted);
-            writer.Write(ConnectionId);
-            var pkBytes = CryptoHelper.SerializePublicKey(PublicKey);
-            writer.Write(pkBytes.Length);
-            writer.Write(pkBytes);
-            return 1+8+4+pkBytes.Length;
-        }
-        public void Deserialize(BinaryReader reader)
-        {
-            Accepted = reader.ReadBoolean();
-            ConnectionId = reader.ReadUInt64();
-            var pkLength = reader.ReadInt32();
-            var pkBytes = reader.ReadBytes(pkLength);
-            PublicKey = CryptoHelper.DeserializePublicKey(pkBytes);
-        }
     }
 }

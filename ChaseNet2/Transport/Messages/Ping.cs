@@ -1,20 +1,13 @@
 ﻿using System.IO;
 using ChaseNet2.Serialization;
+using ProtoBuf;
 
 namespace ChaseNet2.Transport.Messages
 {
-    public class Ping:IStreamSerializable
+    [ProtoContract]
+    public class Ping
     {
+        [ProtoMember(1)]
         public int RandomNumber { get; set; }
-        public int Serialize(BinaryWriter writer)
-        {
-            writer.Write(RandomNumber);
-            return 4;
-        }
-
-        public void Deserialize(BinaryReader reader)
-        {
-            RandomNumber=reader.ReadInt32();
-        }
     }
 }

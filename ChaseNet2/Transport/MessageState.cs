@@ -6,6 +6,7 @@
         Sent,
         Delivered,
         Received,
+        WaitingForParts,
         Failed
     }
 }
