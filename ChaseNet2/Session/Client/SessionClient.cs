@@ -14,9 +14,9 @@ namespace ChaseNet2.Session
         private ConnectionManager _connectionManager;
         public SessionClientState State { get; private set; }
         public SessionUpdate LastSessionUpdate { get; private set; }
-        
-        public ulong TrackerConnectionId { get => _trackerConnection.ConnectionId;  }
-        
+
+        public ulong TrackerConnectionId { get => _trackerConnection.ConnectionId; }
+
         NetworkMessage _connectMessage;
         public string SessionId { get; private set; }
         public SessionClient(string sessionName, ConnectionManager manager, Connection trackerConnection)
@@ -26,8 +26,8 @@ namespace ChaseNet2.Session
             AddConnection(trackerConnection.ConnectionId);
             _trackerConnection = trackerConnection;
             SessionId = sessionName;
-            
-            _trackerConnection.RegisterMessageHandler((ulong) InternalChannelType.TrackerInternal, new SessionClientMessageHandler(this));
+
+            _trackerConnection.RegisterMessageHandler((ulong)InternalChannelType.TrackerInternal, new SessionClientMessageHandler(this));
         }
 
         public override Task OnAttached(ConnectionManager manager)
@@ -42,7 +42,7 @@ namespace ChaseNet2.Session
 
         public override void ConnectionUpdate(Connection connection)
         {
-            
+
         }
 
         public override void Update()
@@ -52,11 +52,11 @@ namespace ChaseNet2.Session
         public async Task Connect()
         {
             var joinSessionMessage = new JoinSession() { SessionName = SessionId };
-            
-            _connectMessage = _trackerConnection.EnqueueMessage(MessageType.Reliable, (ulong) InternalChannelType.SessionJoin, joinSessionMessage);
+
+            _connectMessage = _trackerConnection.EnqueueMessage(MessageType.Reliable, (ulong)InternalChannelType.SessionJoin, joinSessionMessage);
             await _trackerConnection.WaitForDeliveryAsync(_connectMessage);
 
-            if (_connectMessage.State==MessageState.Failed)
+            if (_connectMessage.State == MessageState.Failed)
             {
                 throw new Exception("Failed to connect to session");
             }
@@ -81,17 +81,17 @@ namespace ChaseNet2.Session
         {
             // update our session state
             LastSessionUpdate = update;
-            
+
             // update our connections to match the session state
             var ConnectionsToAdd = update.Peers.Where(x =>
-                _connectionManager.Connections.FirstOrDefault(y => y.ConnectionId == x.ConnectionId)==null);
-            
+                _connectionManager.Connections.FirstOrDefault(y => y.ConnectionId == x.ConnectionId) == null);
+
             var ConnectionsToRemove = ConnectionIDs.Where(x =>
-                update.Peers.FirstOrDefault(y => y.ConnectionId == x)==null).ToList();
+                update.Peers.FirstOrDefault(y => y.ConnectionId == x) == null).ToList();
 
             foreach (var connection in ConnectionsToAdd)
             {
-                if (connection.ConnectionId==0) // this is us
+                if (connection.ConnectionId == 0) // this is us
                     continue;
                 Log.Logger.Information("Connecting to a new peer with connectionID {ConnectionId}", connection.ConnectionId, SessionId);
                 _connectionManager.AttachConnectionAsync(connection).Wait();
@@ -99,14 +99,14 @@ namespace ChaseNet2.Session
             }
             foreach (var connection in ConnectionsToRemove)
             {
-                if (connection==0||connection==_trackerConnection.ConnectionId) // this is us
+                if (connection == 0 || connection == _trackerConnection.ConnectionId) // this is us
                     continue;
                 _connectionManager.RemoveConnection(connection);
                 RemoveConnection(connection);
             }
         }
     }
-    
+
     public class SessionClientMessageHandler : IMessageHandler
     {
         SessionClient _client;
@@ -114,7 +114,7 @@ namespace ChaseNet2.Session
         {
             _client = client;
         }
-        
+
         public void HandleMessage(Connection connection, NetworkMessage message)
         {
             switch (message.Content)

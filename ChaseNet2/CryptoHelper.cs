@@ -25,7 +25,7 @@ namespace ChaseNet2
             AsymmetricCipherKeyPair keyPair = g.GenerateKeyPair();
             return keyPair;
         }
-        
+
         public static byte[] SerializePublicKey(AsymmetricKeyParameter publicKey)
         {
             if (publicKey.IsPrivate)
@@ -35,7 +35,7 @@ namespace ChaseNet2
             ECPublicKeyParameters ecPublicKey = (ECPublicKeyParameters)publicKey;
             return ecPublicKey.Q.GetEncoded();
         }
-        
+
         public static AsymmetricKeyParameter DeserializePublicKey(byte[] publicKey)
         {
             var x9EC = NistNamedCurves.GetByName("P-521");

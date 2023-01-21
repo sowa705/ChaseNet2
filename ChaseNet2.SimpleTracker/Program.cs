@@ -16,14 +16,14 @@ cm.AttachHandler(st);
 
 st.SessionName = "TrackerSession";
 
-int counter=0;
+int counter = 0;
 while (true)
 {
-    if (counter%30==0)
+    if (counter % 30 == 0)
     {
         Console.WriteLine($"Host statistics: {cm.Statistics}");
     }
-            
+
     await Task.Delay(100);
     await cm.Update();
     counter++;

@@ -8,13 +8,13 @@ using Serilog;
 
 namespace ChaseNet2.Session
 {
-    public class SessionTracker: ConnectionHandler
+    public class SessionTracker : ConnectionHandler
     {
         public ConnectionManager ConnectionManager { get; set; }
         public string SessionName { get; set; }
-        
+
         public List<TrackerConnection> Connections { get; set; }
-        
+
         public SessionTracker()
         {
             Connections = new List<TrackerConnection>();
@@ -38,7 +38,7 @@ namespace ChaseNet2.Session
         public override void ConnectionUpdate(Connection connection)
         {
             var trackerConnection = Connections.Find(c => c.Connection == connection);
-            
+
             if (trackerConnection != null)
             {
                 trackerConnection.Update();
@@ -47,7 +47,7 @@ namespace ChaseNet2.Session
 
         public override void Update()
         {
-            var connectionsToRemove = Connections.Where(x=>x.Connection.State == ConnectionState.Disconnected);
+            var connectionsToRemove = Connections.Where(x => x.Connection.State == ConnectionState.Disconnected);
             foreach (var connection in connectionsToRemove)
             {
                 ConnectionManager.RemoveConnection(connection.Connection.ConnectionId);

@@ -1,20 +1,13 @@
 ﻿using System.IO;
 using ChaseNet2.Serialization;
+using ProtoBuf;
 
 namespace ChaseNet2.Transport.Messages
 {
-    public class Ack:IStreamSerializable
+    [ProtoContract]
+    public class Ack
     {
+        [ProtoMember(1)]
         public ulong MessageID { get; set; }
-        public int Serialize(BinaryWriter writer)
-        {
-            writer.Write(MessageID);
-            return 8;
-        }
-
-        public void Deserialize(BinaryReader reader)
-        {
-            MessageID = reader.ReadUInt64();
-        }
     }
 }

@@ -11,7 +11,7 @@ namespace ChaseNet2.Transport
         public int ResendCount { get; set; }
         public bool IsSplit { get; set; }
         public List<NetworkMessage> SentFragmentMessages { get; set; }
-        
+
         public TaskCompletionSource<bool>? DeliveryTask { get; set; }
 
         public SentMessage(NetworkMessage message)

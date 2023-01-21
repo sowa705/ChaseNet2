@@ -18,13 +18,13 @@ public class Program
     {
         InitLogger();
         await InitNetwork();
-        
+
         Console.WriteLine("Starting with args:" + string.Join(" ", args));
 
         if (args[0] == "Host")
         {
             FileHost host = new FileHost(args[1]);
-            
+
             Manager.AttachHandler(host);
 
             while (true)
@@ -32,7 +32,7 @@ public class Program
                 await Task.Delay(200);
             }
         }
-        
+
         if (args[0] == "Client")
         {
             FileClient client = new FileClient();
@@ -55,9 +55,9 @@ public class Program
                 {
                     var filename = cmd.Split(' ')[1];
                     var dest = cmd.Split(' ')[2];
-                    
+
                     var file = client.DiscoveredFiles.FirstOrDefault(x => x.Item2.FileName == filename);
-                    
+
                     client.StartTransfer(file.Item2, dest);
                 }
             }
@@ -73,7 +73,7 @@ public class Program
         var trackerConnection = Manager.CreateConnection(IPEndPoint.Parse("127.0.0.1:2137"));
 
         Client = new SessionClient("TrackerSession", Manager, trackerConnection);
-        
+
         // Register types
         Manager.Serializer.RegisterType<FileSpec>();
         Manager.Serializer.RegisterType<FilePartSpec>();
@@ -110,7 +110,7 @@ public class Program
 
     public static async Task NetworkThread()
     {
-        int counter=0;
+        int counter = 0;
         while (true)
         {
             await Task.Delay(50);

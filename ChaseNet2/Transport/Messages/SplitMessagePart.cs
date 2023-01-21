@@ -1,41 +1,25 @@
 using System.IO;
 using ChaseNet2.Serialization;
+using ProtoBuf;
 
 namespace ChaseNet2.Transport.Messages
 {
-    public class SplitMessagePart : IStreamSerializable
+    [ProtoContract]
+    public class SplitMessagePart
     {
+        [ProtoMember(1)]
         public ulong OriginalMessageId { get; set; }
+        [ProtoMember(2)]
         public ulong Channel { get; set; }
+        [ProtoMember(3)]
         public MessageType OriginalMessageType { get; set; }
+        [ProtoMember(4)]
         public int PartNumber { get; set; }
+        [ProtoMember(5)]
         public int TotalParts { get; set; }
+        [ProtoMember(6)]
         public int PartSize { get; set; }
+        [ProtoMember(7)]
         public byte[] Data { get; set; }
-        
-        public int Serialize(BinaryWriter writer)
-        {
-            writer.Write(OriginalMessageId);
-            writer.Write(Channel);
-            writer.Write((byte)OriginalMessageType);
-            writer.Write(PartNumber);
-            writer.Write(TotalParts);
-            writer.Write(PartSize);
-            writer.Write(Data.Length);
-            writer.Write(Data);
-            
-            return sizeof(ulong) + sizeof(ulong) + 1 + sizeof(int) + sizeof(int) + sizeof(int) + sizeof(int) + Data.Length;
-        }
-        
-        public void Deserialize(BinaryReader reader)
-        {
-            OriginalMessageId = reader.ReadUInt64();
-            Channel = reader.ReadUInt64();
-            OriginalMessageType = (MessageType)reader.ReadByte();
-            PartNumber = reader.ReadInt32();
-            TotalParts = reader.ReadInt32();
-            PartSize = reader.ReadInt32();
-            Data = reader.ReadBytes(reader.ReadInt32());
-        }
     }
 }

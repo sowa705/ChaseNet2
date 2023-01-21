@@ -1,23 +1,14 @@
 using ChaseNet2.Extensions;
 using ChaseNet2.Serialization;
+using ProtoBuf;
 
-public class FilePartRequest : IStreamSerializable
+[ProtoContract]
+public class FilePartRequest
 {
+    [ProtoMember(1)]
     public string FileName { get; set; }
+    [ProtoMember(2)]
     public long Offset { get; set; }
+    [ProtoMember(3)]
     public int Length { get; set; }
-    public int Serialize(BinaryWriter writer)
-    {
-        int size = writer.WriteUTF8String(FileName);
-        writer.Write(Offset);
-        writer.Write(Length);
-        return size+8+4;
-    }
-
-    public void Deserialize(BinaryReader reader)
-    {
-        FileName = reader.ReadUTF8String();
-        Offset = reader.ReadInt32();
-        Length = reader.ReadInt32();
-    }
 }

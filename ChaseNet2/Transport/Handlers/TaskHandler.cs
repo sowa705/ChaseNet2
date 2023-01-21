@@ -3,7 +3,7 @@ using Serilog;
 
 namespace ChaseNet2.Transport
 {
-    public class TaskHandler:IMessageHandler
+    public class TaskHandler : IMessageHandler
     {
         public TaskCompletionSource<NetworkMessage> TaskCompletionSource;
 

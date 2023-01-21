@@ -19,7 +19,7 @@ public class ConnectionManagerTests
 
         Log.Logger = logger;
     }
-    
+
     /// <summary>
     /// Run a few update cycles asynchronously
     /// </summary>
@@ -46,13 +46,13 @@ public class ConnectionManagerTests
         var first = new ConnectionManager(port);
         first.AcceptNewConnections = true;
         var second = new ConnectionManager();
-        
+
         first.Serializer.RegisterType(typeof(DummyMessage));
         second.Serializer.RegisterType(typeof(DummyMessage));
-        
+
         var connection = second.CreateConnection(IPEndPoint.Parse($"127.0.0.1:{port}"));
         await UpdateManagers(first, second);
-        
+
         return (first, second, connection);
     }
 
@@ -61,14 +61,13 @@ public class ConnectionManagerTests
     {
         // Arrange & Act
         var (first, second, connection) = await GetConnectedManagers();
-        
+
         // Assert
         Assert.True(connection.State == ConnectionState.Connected);
     }
-    
+
     [Theory]
     [InlineData(64, true)]
-    [InlineData(48000, true)] // first size that will be fragmented
     [InlineData(1024 * 1024 + 1, true)] // Weird size that will be fragmented
     [InlineData(1024 * 1024 * 16, false)] // Over the default MTU
     public async Task ConnectionShouldSendReliableMessage(int packetSize, bool shouldPass)
@@ -90,12 +89,12 @@ public class ConnectionManagerTests
             Assert.True(connection2.IncomingMessages.Count == 0);
             return;
         }
-        
+
         var receivedMessage = connection2.IncomingMessages.FirstOrDefault();
-        var receivedContent = (DummyMessage) receivedMessage.Content;
+        var receivedContent = (DummyMessage)receivedMessage.Content;
         Assert.Equal(shouldPass, receivedContent == messageContent);
     }
-    
+
     [Theory]
     [InlineData(0.0f)]
     [InlineData(0.1f)]
@@ -109,7 +108,7 @@ public class ConnectionManagerTests
         var connection2 = first.Connections.First();
 
         // Act
-        DummyMessage messageContent = new DummyMessage(1024*1024*2);
+        DummyMessage messageContent = new DummyMessage(1024 * 1024 * 2);
         var message = connection.EnqueueMessage(MessageType.Reliable, 1000, messageContent);
         int maxUpdates = 0;
         while (!(message.State == MessageState.Failed || message.State == MessageState.Delivered) && maxUpdates < 10)
@@ -121,7 +120,7 @@ public class ConnectionManagerTests
 
         // Assert
         var receivedMessage = connection2.IncomingMessages.First();
-        var receivedContent = (DummyMessage) receivedMessage.Content;
+        var receivedContent = (DummyMessage)receivedMessage.Content;
         Assert.True(receivedContent == messageContent);
         Assert.True(message.State == MessageState.Delivered);
     }

@@ -11,7 +11,7 @@ namespace ChaseNet2.Transport
         public object Content { get; set; }
         public MessageState State { get; set; }
 
-        
+
         public NetworkMessage(ulong id, ulong channelId, MessageType type, object content)
         {
             ID = id;

@@ -7,7 +7,7 @@ namespace ChaseNet2.Transport
 {
     public partial class Connection
     {
-        public class InternalMessageHandler:IMessageHandler
+        public class InternalMessageHandler : IMessageHandler
         {
             public void HandleMessage(Connection connection, NetworkMessage message)
             {
@@ -30,7 +30,7 @@ namespace ChaseNet2.Transport
                                 }
                             }
                             sentMessage.Message.State = MessageState.Delivered;
-                            if (sentMessage.DeliveryTask!=null)
+                            if (sentMessage.DeliveryTask != null)
                             {
                                 sentMessage.DeliveryTask.SetResult(true);
                             }
@@ -47,11 +47,11 @@ namespace ChaseNet2.Transport
                         if (pong.RandomNumber == connection.RandomPingNumber)
                         {
                             // we got a valid pong
-                            var pingTime = (DateTime.UtcNow - connection.LastPing)/2; // ping is half of round trip time
-                                    
-                            connection.AveragePing = (connection.AveragePing + (float) pingTime.TotalMilliseconds) / 2; // simple moving average
+                            var pingTime = (DateTime.UtcNow - connection.LastPing) / 2; // ping is half of round trip time
+
+                            connection.AveragePing = (connection.AveragePing + (float)pingTime.TotalMilliseconds) / 2; // simple moving average
                             connection.LastReceivedPong = DateTime.UtcNow;
-                                    
+
                             connection.State = ConnectionState.Connected; // ping came back so obviously we are connected
                         }
                         break;
@@ -60,16 +60,16 @@ namespace ChaseNet2.Transport
                         {
                             connection._splitReceivedMessages.Add(splitMessagePart.OriginalMessageId, new SplitReceivedMessage(splitMessagePart));
                         }
-                        
+
                         var splitMessage = connection._splitReceivedMessages[splitMessagePart.OriginalMessageId];
                         splitMessage.AddPart(splitMessagePart);
-                        Log.Debug("Added part {part}  ({partCount}/{total}) to split message {id}", splitMessagePart.PartNumber, splitMessage.ReceivedParts.Count,splitMessagePart.TotalParts, splitMessagePart.OriginalMessageId);
+                        Log.Debug("Added part {part}  ({partCount}/{total}) to split message {id}", splitMessagePart.PartNumber, splitMessage.ReceivedParts.Count, splitMessagePart.TotalParts, splitMessagePart.OriginalMessageId);
 
                         if (splitMessage.IsComplete())
                         {
                             Log.Debug("Split message complete");
                             var networkMessage = splitMessage.GetCompleteMessage(connection._manager.Serializer);
-                            
+
                             connection.RouteReceivedMessage(networkMessage);
                         }
                         break;
