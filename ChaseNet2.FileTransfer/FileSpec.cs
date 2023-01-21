@@ -42,7 +42,7 @@ public class FileSpec
         return spec;
     }
 
-    private static async Task<byte[]> HashFilePart(FileStream fs, long partPartSize)
+    public static async Task<byte[]> HashFilePart(FileStream fs, long partPartSize)
     {
         byte[] buffer = new byte[partPartSize];
         await fs.ReadAsync(buffer, 0, (int)partPartSize);

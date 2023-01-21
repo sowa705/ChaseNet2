@@ -17,13 +17,13 @@ public class Program
     public static async Task Main(string[] args)
     {
         InitLogger();
-        await InitNetwork();
+        await InitNetwork(args[0]);
 
         Console.WriteLine("Starting with args:" + string.Join(" ", args));
 
-        if (args[0] == "Host")
+        if (args[1] == "Host")
         {
-            FileHost host = new FileHost(args[1]);
+            FileHost host = new FileHost(args[2]);
 
             Manager.AttachHandler(host);
 
@@ -33,7 +33,7 @@ public class Program
             }
         }
 
-        if (args[0] == "Client")
+        if (args[1] == "Client")
         {
             FileClient client = new FileClient();
             Manager.AttachHandler(client);
@@ -64,13 +64,13 @@ public class Program
         }
     }
 
-    private static async Task InitNetwork()
+    private static async Task InitNetwork(string trackerEP)
     {
         Manager = new ConnectionManager();
         await Manager.Update();
 
         // hehe
-        var trackerConnection = Manager.CreateConnection(IPEndPoint.Parse("127.0.0.1:2137"));
+        var trackerConnection = Manager.CreateConnection(IPEndPoint.Parse(trackerEP));
 
         Client = new SessionClient("TrackerSession", Manager, trackerConnection);
 

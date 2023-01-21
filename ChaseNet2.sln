@@ -2,8 +2,6 @@
 Microsoft Visual Studio Solution File, Format Version 12.00
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ChaseNet2", "ChaseNet2\ChaseNet2.csproj", "{E110C7F6-F4FD-41C5-9EA5-0803923E19F9}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ChaseNet2.Demo", "ChaseNet2.Demo\ChaseNet2.Demo.csproj", "{7E15B86C-B26E-4FA5-A6D8-B5FB00A4BA8C}"
-EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ChaseNet2.FileTransfer", "ChaseNet2.FileTransfer\ChaseNet2.FileTransfer.csproj", "{7399BDDA-AE50-45AC-BC1B-AAA950CD1806}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ChaseNet2.SimpleTracker", "ChaseNet2.SimpleTracker\ChaseNet2.SimpleTracker.csproj", "{351E30D1-26E4-4CC9-8673-9207614BD98B}"
@@ -20,10 +18,6 @@ Global
 		{E110C7F6-F4FD-41C5-9EA5-0803923E19F9}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{E110C7F6-F4FD-41C5-9EA5-0803923E19F9}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{E110C7F6-F4FD-41C5-9EA5-0803923E19F9}.Release|Any CPU.Build.0 = Release|Any CPU
-		{7E15B86C-B26E-4FA5-A6D8-B5FB00A4BA8C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{7E15B86C-B26E-4FA5-A6D8-B5FB00A4BA8C}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{7E15B86C-B26E-4FA5-A6D8-B5FB00A4BA8C}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{7E15B86C-B26E-4FA5-A6D8-B5FB00A4BA8C}.Release|Any CPU.Build.0 = Release|Any CPU
 		{7399BDDA-AE50-45AC-BC1B-AAA950CD1806}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{7399BDDA-AE50-45AC-BC1B-AAA950CD1806}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{7399BDDA-AE50-45AC-BC1B-AAA950CD1806}.Release|Any CPU.ActiveCfg = Release|Any CPU

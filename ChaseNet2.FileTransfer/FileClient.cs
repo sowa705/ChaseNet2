@@ -1,3 +1,4 @@
+using System.Security.Cryptography;
 using ChaseNet2.Transport;
 using Newtonsoft.Json;
 using Serilog;
@@ -45,6 +46,15 @@ public class FileClient : ConnectionHandler
 
     private void HandleFilePartResponse(FilePartResponse filePartResponse)
     {
+        var receivedHash = SHA256.Create().ComputeHash(filePartResponse.Data);
+        var specHash = CurrentTransfer.FileSpec.Parts.First(x=>x.Offset == filePartResponse.Offset).Hash;
+
+        if (!receivedHash.Equals(specHash))
+        {
+            Log.Error("Received file part with invalid hash");
+            return;
+        }
+        
         CurrentTransfer.DestinationStream.Seek((int)filePartResponse.Offset, SeekOrigin.Begin);
         CurrentTransfer.DestinationStream.Write(filePartResponse.Data, 0, filePartResponse.Data.Length);
         CurrentTransfer.Progress.DownloadedParts.Add(filePartResponse.Offset);
