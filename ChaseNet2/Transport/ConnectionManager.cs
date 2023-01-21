@@ -110,6 +110,7 @@ namespace ChaseNet2.Transport
         public void AttachHandler(ConnectionHandler connectionHandler)
         {
             Handlers.Add(connectionHandler);
+            connectionHandler.OnAttached(this);
         }
         
         public void DetachHandler(ConnectionHandler connectionHandler)

@@ -1,9 +1,11 @@
 using System.Security.Cryptography;
+using ChaseNet2.Extensions;
+using ChaseNet2.Serialization;
 
-public class FileSpec
+public class FileSpec : IStreamSerializable
 {
     public string FileName { get; set; }
-    public List<FilePartSpec> Parts { get; set; }
+    public List<FilePartSpec> Parts { get; set; } = new List<FilePartSpec>();
     
     public static async Task<FileSpec> Create(string path)
     {
@@ -17,7 +19,7 @@ public class FileSpec
         var parts = new List<FilePartSpec>();
         spec.Parts = parts;
         
-        var partSize = 32768;
+        var partSize = 1024 * 1024 * 1; //1MB
 
         while (fs.Position < fs.Length)
         {
@@ -38,5 +40,18 @@ public class FileSpec
         byte[] buffer = new byte[partPartSize];
         await fs.ReadAsync(buffer, 0, (int) partPartSize);
         return SHA256.Create().ComputeHash(buffer);
+    }
+
+    public int Serialize(BinaryWriter writer)
+    {
+        int strSize = writer.WriteUTF8String(FileName);
+        int partsSize = Parts.Serialize(writer);
+        return strSize + partsSize;
+    }
+
+    public void Deserialize(BinaryReader reader)
+    {
+        FileName = reader.ReadUTF8String();
+        Parts.Deserialize(reader);
     }
 }

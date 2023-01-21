@@ -41,7 +41,7 @@ namespace ChaseNet2.Transport
                         {
                             RandomNumber = ping.RandomNumber
                         };
-                        connection.EnqueueInternalMessage(MessageType.Unreliable, p);
+                        connection.EnqueueInternalMessage(MessageType.Priority, p);
                         break;
                     case Pong pong:
                         if (pong.RandomNumber == connection.RandomPingNumber)
@@ -62,8 +62,8 @@ namespace ChaseNet2.Transport
                         }
                         
                         var splitMessage = connection._splitReceivedMessages[splitMessagePart.OriginalMessageId];
-                        Log.Debug("Added part {part}  ({partCount}/{total}) to split message {id}", splitMessagePart.PartNumber, splitMessage.ReceivedParts.Count,splitMessagePart.TotalParts, splitMessagePart.OriginalMessageId);
                         splitMessage.AddPart(splitMessagePart);
+                        Log.Debug("Added part {part}  ({partCount}/{total}) to split message {id}", splitMessagePart.PartNumber, splitMessage.ReceivedParts.Count,splitMessagePart.TotalParts, splitMessagePart.OriginalMessageId);
 
                         if (splitMessage.IsComplete())
                         {

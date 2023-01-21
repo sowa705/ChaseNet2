@@ -5,26 +5,33 @@ using Serilog;
 public class FileHost : ConnectionHandler, IMessageHandler
 {
     FileSpec Spec;
+    private string FilePath;
     FileStream Stream;
-    public FileHost(string specPath,string filePath)
+    
+    List<Connection> Connections = new List<Connection>();
+    DateTime LastBroadcastTime;
+    
+    public FileHost(string filePath)
     {
-        var specText = File.ReadAllText(specPath);
-        Spec = JsonSerializer.Deserialize<FileSpec>(specText);
-            
-        Stream = new FileStream(filePath, FileMode.Open);
+        FilePath = filePath;
+        LastBroadcastTime = DateTime.UtcNow;
     }
 
-    public override Task OnAttached(ConnectionManager manager)
+    public override async Task OnAttached(ConnectionManager manager)
     {
+        Log.Information("Starting file host");
+        Spec = await FileSpec.Create(FilePath);
+        Stream = new FileStream(FilePath, FileMode.Open);
+        
         manager.Serializer.RegisterType(typeof(FilePartRequest));
         manager.Serializer.RegisterType(typeof(FilePartResponse));
-        
-        return Task.CompletedTask;
     }
 
     public override Task OnManagerConnect(Connection connection)
     {
         connection.RegisterMessageHandler(997,this);
+        Connections.Add(connection);
+        
         return Task.CompletedTask;
     }
 
@@ -34,6 +41,16 @@ public class FileHost : ConnectionHandler, IMessageHandler
 
     public override void Update()
     {
+        if (LastBroadcastTime.AddSeconds(2) < DateTime.UtcNow)
+        {
+            LastBroadcastTime = DateTime.UtcNow;
+            Log.Information("Broadcasting file spec");
+
+            foreach (var connection in Connections)
+            {
+                connection.EnqueueMessage(MessageType.Reliable | MessageType.Priority, 997, Spec);
+            }
+        }
     }
 
     public void HandleMessage(Connection connection, NetworkMessage message)
@@ -57,7 +74,7 @@ public class FileHost : ConnectionHandler, IMessageHandler
                     
                 part.Data = buffer;
                     
-                connection.EnqueueMessage(MessageType.Reliable,998,part);
+                connection.EnqueueMessage(MessageType.Reliable,997,part);
                 Log.Information("Sent {0} bytes at offset {1} of file {2} to client",request.Length,request.Offset,Spec.FileName);
                 break;
         }

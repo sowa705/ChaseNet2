@@ -28,7 +28,7 @@ namespace ChaseNet2.Transport
         private byte[] _sharedKey;
         
         public ConcurrentQueue<NetworkMessage> IncomingMessages { get; private set; }
-        ConcurrentQueue<NetworkMessage> OutgoingMessages { get; set; }
+        LinkedList<NetworkMessage> OutgoingMessages { get; set; }
         
         Dictionary<ulong,SentMessage> _trackedSentMessages;
         // Messages that are waiting for other parts to arrive
@@ -67,7 +67,7 @@ namespace ChaseNet2.Transport
             }
             
             IncomingMessages = new ConcurrentQueue<NetworkMessage>();
-            OutgoingMessages = new ConcurrentQueue<NetworkMessage>();
+            OutgoingMessages = new LinkedList<NetworkMessage>();
             MessageHandlers = new Dictionary<ulong, IMessageHandler>();
             
             _trackedSentMessages = new Dictionary<ulong,SentMessage>();
@@ -93,9 +93,16 @@ namespace ChaseNet2.Transport
         public NetworkMessage EnqueueMessage(MessageType type,ulong channelID, object obj)
         {
             var message = new NetworkMessage(CurrentMessageId++, channelID, type, obj);
-            OutgoingMessages.Enqueue(message);
+            if (type.HasFlag(MessageType.Priority))
+            {
+                OutgoingMessages.AddFirst(message);
+            }
+            else
+            {
+                OutgoingMessages.AddLast(message);
+            }
             
-            if (message.Type==MessageType.Reliable) //we need to track this message for later
+            if (message.Type.HasFlag(MessageType.Reliable)) //we need to track this message for later
             {
                 _trackedSentMessages.Add(message.ID,new SentMessage(message));
             }
@@ -288,10 +295,10 @@ namespace ChaseNet2.Transport
                 LastPing = DateTime.UtcNow;
                 RandomPingNumber = _rng.Next();
                 Ping p = new Ping() { RandomNumber = RandomPingNumber };
-                EnqueueInternalMessage(MessageType.Unreliable, p);
+                EnqueueInternalMessage(MessageType.Priority, p);
             }
 
-            if (LastReceivedPong+TimeSpan.FromSeconds(5)<DateTime.UtcNow&&(State!=ConnectionState.Started||State!=ConnectionState.Disconnected))
+            if (LastReceivedPong+TimeSpan.FromSeconds(10)<DateTime.UtcNow&&(State!=ConnectionState.Started||State!=ConnectionState.Disconnected))
             {
                 Log.Logger.Warning("Lost connection {0}, trying to reconnect", ConnectionId);
                 State = ConnectionState.Disconnected; // we haven't received a pong in 5 seconds so we are probably disconnected
@@ -301,7 +308,7 @@ namespace ChaseNet2.Transport
 
             foreach (var msg in _trackedSentMessages)
             {
-                if (msg.Value.Message.State==MessageState.Sent && DateTime.UtcNow>msg.Value.LastSent+GetResendInterval() && !msg.Value.IsSplit)
+                if (msg.Value.Message.State==MessageState.Sent && DateTime.UtcNow>msg.Value.LastSent+GetResendInterval(msg.Value.Message.Type) && !msg.Value.IsSplit)
                 {
                     if (msg.Value.ResendCount>3) //failed to deliver message
                     {
@@ -312,15 +319,15 @@ namespace ChaseNet2.Transport
                     }
                     Log.Warning("Resending message {MessageID}",msg.Value.Message.ID);
                     // resend the message
-                    msg.Value.LastSent=DateTime.UtcNow;
+                    msg.Value.LastSent = DateTime.UtcNow;
                     msg.Value.ResendCount++;
-                    OutgoingMessages.Enqueue(msg.Value.Message);
+                    OutgoingMessages.AddFirst(msg.Value.Message);
                 }
 
                 if (msg.Value.IsSplit && msg.Value.Message.State == MessageState.Sent)
                 {
                     // failed to deliver a split message
-                    if (DateTime.UtcNow>msg.Value.LastSent+(GetResendInterval()*8) && msg.Value.SentFragmentMessages.Any(x => x.State!=MessageState.Delivered))
+                    if (DateTime.UtcNow>msg.Value.LastSent+(GetResendInterval(msg.Value.Message.Type)*6) && msg.Value.SentFragmentMessages.Any(x => x.State!=MessageState.Delivered))
                     {
                         msg.Value.Message.State = MessageState.Failed;
                         Log.Information("Failed to deliver split message {MessageID}",msg.Value.Message.ID);
@@ -331,7 +338,7 @@ namespace ChaseNet2.Transport
             }
             
             // clean up old message ids
-            while (_ReceivedMessageIds.Count>300)
+            while (_ReceivedMessageIds.Count>10000)
             {
                 _ReceivedMessageIds.RemoveFirst();
             }
@@ -348,19 +355,28 @@ namespace ChaseNet2.Transport
         /// compute the resend interval based on the average ping and reasonable lower and upper bounds
         /// </summary>
         /// <returns></returns>
-        public TimeSpan GetResendInterval()
+        public TimeSpan GetResendInterval(MessageType type)
         {
-            var resendInterval = (int) (AveragePing * 3.5f); //rtt + some extra time
+            float multiplier = 1;
+            if (type.HasFlag(MessageType.Priority))
+            {
+                multiplier = 0.75f;
+            }
+            if (type.HasFlag(MessageType.Bulk))
+            {
+                multiplier = 3f;
+            }
+            var resendInterval = (int) (AveragePing * 3f) + _rng.Next(0,20); //rtt + some extra time
             
             resendInterval = Math.Clamp(resendInterval, 120, 500); // clamp to reasonable values
             
-            return TimeSpan.FromMilliseconds(resendInterval);
+            return TimeSpan.FromMilliseconds(resendInterval) * multiplier;
         }
 
         private void SendMessages()
         {
             int totalBytesSent = 0;
-            while (!OutgoingMessages.IsEmpty&&totalBytesSent<_manager.Settings.MaxBytesSentPerUpdate)
+            while (OutgoingMessages.Count>0 && totalBytesSent < _manager.Settings.MaxBytesSentPerUpdate)
             {
                 if (PeerPublicKey==null)
                 {
@@ -382,14 +398,15 @@ namespace ChaseNet2.Transport
                 writer.Write(0x12345678);
                 
                 // write messages until we run out of space or packets
-                var maxPacketSize = 60000; //intentionally small to account for potential overhead
+                var maxPacketSize = _manager.Settings.MaximumTransmissionUnit-128; // account for potential overhead
                 
                 int packetCount = 0;
                 
                 var currentPacketSize = 16+4; //initialization vector + preamble
-                while (!OutgoingMessages.IsEmpty && currentPacketSize < maxPacketSize)
+                while (OutgoingMessages.Count>0 && currentPacketSize < maxPacketSize)
                 {
-                    OutgoingMessages.TryDequeue(out var message);
+                    var message = OutgoingMessages.First();
+                    OutgoingMessages.RemoveFirst();
 
                     if (message.State == MessageState.Delivered || message.State == MessageState.Failed)
                     {
@@ -399,7 +416,7 @@ namespace ChaseNet2.Transport
                     var serializedMessage = _manager.Serializer.Serialize(message.Content);
                     int contentSize = serializedMessage.Length;
                     
-                    if (contentSize>48000)
+                    if (contentSize>(_manager.Settings.MaximumTransmissionUnit/2))
                     {
                         if (contentSize>_manager.Settings.MaxMessageLength)
                         {
@@ -415,7 +432,7 @@ namespace ChaseNet2.Transport
                     
                     if (contentSize+currentPacketSize>maxPacketSize)
                     {
-                        OutgoingMessages.Enqueue(message);
+                        OutgoingMessages.AddFirst(message);
                         break;
                     }
                     
@@ -436,7 +453,7 @@ namespace ChaseNet2.Transport
 
                     Log.Debug("Sending message {MessageID} on channel {ChannelID} of type {MessageType} with content {Content}",message.ID,message.ChannelID,message.Type,message.Content.GetType());
 
-                    currentPacketSize += 4 + 1 + contentSize; //messageID + messageType + content
+                    currentPacketSize += contentSize+16+4+4+1; //messageID + messageType + content
                 }
                 
                 // flush the streams
@@ -456,20 +473,22 @@ namespace ChaseNet2.Transport
         {
             int contentSize = serializedMessage.Length;
             _trackedSentMessages[message.ID].IsSplit = true;
+            
+            int fragmentSize = (int)(_manager.Settings.MaximumTransmissionUnit/4f);
 
-            for (int i = 0; i < contentSize; i += 32768)
+            for (int i = 0; i < contentSize; i += fragmentSize)
             {
-                SplitMessagePart part = new SplitMessagePart()
+                SplitMessagePart part = new SplitMessagePart
                 {
                     OriginalMessageId = message.ID,
                     OriginalMessageType = message.Type,
-                    TotalParts = (contentSize / 32768) + 1,
-                    PartNumber = i / 32768,
-                    PartSize = 32768,
-                    Data = serializedMessage.Skip(i).Take(32768).ToArray()
+                    TotalParts = (contentSize / fragmentSize) + 1,
+                    PartNumber = i / fragmentSize,
+                    PartSize = fragmentSize,
+                    Data = serializedMessage.Skip(i).Take(fragmentSize).ToArray()
                 };
 
-                var enqueuedMsg = EnqueueInternalMessage(message.Type, part);
+                var enqueuedMsg = EnqueueInternalMessage(message.Type | MessageType.Bulk, part); // send as priority message because this message already went through the queue
 
                 if (message.Type.HasFlag(MessageType.Reliable))
                 {

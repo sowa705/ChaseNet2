@@ -2,7 +2,6 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Runtime.Serialization.Formatters.Binary;
 using System.Security.Cryptography;
 using System.Text;
 using ChaseNet2.Session.Messages;
@@ -20,6 +19,12 @@ namespace ChaseNet2.Serialization
         /// This is a bit slower but provides useful information for debugging
         /// </summary>
         public bool CopyMode = true;
+        
+        public ulong RegisterType<T>(bool useFullName=true)
+        {
+            var type = typeof(T);
+            return RegisterType(type, useFullName);
+        }
         
         public ulong RegisterType(Type type, bool useFullName=true)
         {

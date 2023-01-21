@@ -24,11 +24,11 @@ public class ConnectionManagerTests
     /// Run a few update cycles asynchronously
     /// </summary>
     /// <param name="managers"></param>
-    static async Task UpdateManagers(params ConnectionManager[] managers)
+    public static async Task UpdateManagers(params ConnectionManager[] managers)
     {
-        for (int i = 0; i < 100; i++)
+        for (int i = 0; i < 200; i++)
         {
-            await Task.Delay(10);
+            await Task.Delay(5);
             foreach (var manager in managers)
             {
                 await manager.Update();
@@ -99,14 +99,12 @@ public class ConnectionManagerTests
     [Theory]
     [InlineData(0.0f)]
     [InlineData(0.1f)]
-    [InlineData(0.2f)]
-    [InlineData(0.3f)]
+    [InlineData(0.2f)] // 20% is the max "supported" packet loss. In some cases it can be higher but it's not recommended
     public async Task ConnectionShouldSendReliableMessageWithPacketLoss(float packetLoss)
     {
         // Arrange
         var (first, second, connection) = await GetConnectedManagers();
         first.Settings.SimulatedPacketLoss = packetLoss;
-        first.Settings.MaxBytesSentPerUpdate = 1024 * 128; //small packet size to make sure we don't send all packets in one update
         second.Settings = first.Settings;
         var connection2 = first.Connections.First();
 

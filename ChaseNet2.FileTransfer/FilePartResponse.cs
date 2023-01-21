@@ -4,7 +4,7 @@ using ChaseNet2.Serialization;
 public class FilePartResponse:IStreamSerializable
 {
     public string FileName { get; set; }
-    public int Offset { get; set; }
+    public long Offset { get; set; }
     public byte[] Data { get; set; }
     public int Serialize(BinaryWriter writer)
     {
@@ -14,7 +14,7 @@ public class FilePartResponse:IStreamSerializable
         writer.Write(Data.Length);
         writer.Write(Data);
 
-        return size+4+4+Data.Length;
+        return size+8+4+Data.Length;
     }
 
     public void Deserialize(BinaryReader reader)
