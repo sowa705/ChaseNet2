@@ -9,6 +9,8 @@ public class FileSpec
     [ProtoMember(1)]
     public string FileName { get; set; }
     [ProtoMember(2)]
+    public int PartSize { get; set; }
+    [ProtoMember(3)]
     public List<FilePartSpec> Parts { get; set; } = new List<FilePartSpec>();
 
     public static async Task<FileSpec> Create(string path)
@@ -23,7 +25,8 @@ public class FileSpec
         var parts = new List<FilePartSpec>();
         spec.Parts = parts;
 
-        var partSize = 1024 * 1024 * 1; //1MB
+        var partSize = 1024 * 256; //256kB
+        spec.PartSize = partSize;
 
         while (fs.Position < fs.Length)
         {

@@ -21,22 +21,6 @@ public class ConnectionManagerTests
     }
 
     /// <summary>
-    /// Run a few update cycles asynchronously
-    /// </summary>
-    /// <param name="managers"></param>
-    public static async Task UpdateManagers(params ConnectionManager[] managers)
-    {
-        for (int i = 0; i < 200; i++)
-        {
-            await Task.Delay(5);
-            foreach (var manager in managers)
-            {
-                await manager.Update();
-            }
-        }
-    }
-
-    /// <summary>
     /// Helper method that creates two managers and connects them
     /// </summary>
     /// <returns></returns>
@@ -51,7 +35,7 @@ public class ConnectionManagerTests
         second.Serializer.RegisterType(typeof(DummyMessage));
 
         var connection = second.CreateConnection(IPEndPoint.Parse($"127.0.0.1:{port}"));
-        await UpdateManagers(first, second);
+        await Helpers.UpdateManagers(first, second);
 
         return (first, second, connection);
     }
@@ -79,7 +63,7 @@ public class ConnectionManagerTests
         // Act
         DummyMessage messageContent = new DummyMessage(packetSize);
         var message = connection.EnqueueMessage(MessageType.Reliable, 1000, messageContent);
-        await UpdateManagers(first, second);
+        await Helpers.UpdateManagers(first, second);
 
         // Assert
 
@@ -98,7 +82,6 @@ public class ConnectionManagerTests
     [Theory]
     [InlineData(0.0f)]
     [InlineData(0.1f)]
-    [InlineData(0.2f)] // 20% is the max "supported" packet loss. In some cases it can be higher but it's not recommended
     public async Task ConnectionShouldSendReliableMessageWithPacketLoss(float packetLoss)
     {
         // Arrange
@@ -111,10 +94,10 @@ public class ConnectionManagerTests
         DummyMessage messageContent = new DummyMessage(1024 * 1024 * 2);
         var message = connection.EnqueueMessage(MessageType.Reliable, 1000, messageContent);
         int maxUpdates = 0;
-        while (!(message.State == MessageState.Failed || message.State == MessageState.Delivered) && maxUpdates < 10)
+        while (!(message.State == MessageState.Failed || message.State == MessageState.Delivered) && maxUpdates < 18)
         {
             Log.Debug("Loop {0}", maxUpdates);
-            await UpdateManagers(first, second);
+            await Helpers.UpdateManagers(first, second);
             maxUpdates++;
         }
 

@@ -13,5 +13,5 @@ public class FileTransfer
 
 public class FileTransferProgress
 {
-    public List<long> DownloadedParts;
+    public List<long> DownloadedParts=new List<long>();
 }

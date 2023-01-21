@@ -45,8 +45,8 @@ public class FileClient : ConnectionHandler
 
     private void HandleFilePartResponse(FilePartResponse filePartResponse)
     {
-        CurrentTransfer.DestinationStream.Seek(0, SeekOrigin.Begin);
-        CurrentTransfer.DestinationStream.Write(filePartResponse.Data, (int)filePartResponse.Offset, filePartResponse.Data.Length);
+        CurrentTransfer.DestinationStream.Seek((int)filePartResponse.Offset, SeekOrigin.Begin);
+        CurrentTransfer.DestinationStream.Write(filePartResponse.Data, 0, filePartResponse.Data.Length);
         CurrentTransfer.Progress.DownloadedParts.Add(filePartResponse.Offset);
 
         Log.Information("Downloaded {0} of {1} parts", CurrentTransfer.Progress.DownloadedParts.Count, CurrentTransfer.FileSpec.Parts.Count);
@@ -57,6 +57,9 @@ public class FileClient : ConnectionHandler
             CurrentTransfer.DestinationStream.Close();
             CurrentTransfer.DestinationStream.Dispose();
             CurrentTransfer = null;
+            
+            SentRequest = null;
+            return;
         }
 
         SentRequest = null;
@@ -86,6 +89,10 @@ public class FileClient : ConnectionHandler
             var progress = JsonConvert.DeserializeObject<FileTransferProgress>(File.ReadAllText(progressFile.FullName));
             CurrentTransfer.Progress = progress;
         }
+        else
+        {
+            CurrentTransfer.Progress = new FileTransferProgress();
+        }
     }
 
     public override void Update()
@@ -109,7 +116,8 @@ public class FileClient : ConnectionHandler
             var filePartRequest = new FilePartRequest
             {
                 FileName = CurrentTransfer.FileSpec.FileName,
-                Offset = offset
+                Offset = offset,
+                Length = CurrentTransfer.FileSpec.PartSize
             };
             Log.Information("Requesting part {0}", offset);
             SentRequest = CurrentTransfer.Source.EnqueueMessage(MessageType.Priority | MessageType.Reliable, 997, filePartRequest);

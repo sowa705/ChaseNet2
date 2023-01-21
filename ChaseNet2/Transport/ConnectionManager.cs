@@ -54,7 +54,6 @@ namespace ChaseNet2.Transport
 
             _client = port == null ? new UdpClient() : new UdpClient(port.Value);
             _client.Client.ReceiveBufferSize = Settings.ReceiveBufferSize;
-            _client.Client.DontFragment = true;
 
             Connections = new List<Connection>();
             Handlers = new List<ConnectionHandler>();
@@ -111,7 +110,7 @@ namespace ChaseNet2.Transport
         public void AttachHandler(ConnectionHandler connectionHandler)
         {
             Handlers.Add(connectionHandler);
-            connectionHandler.OnAttached(this);
+            connectionHandler.OnAttached(this).Wait();
         }
 
         public void DetachHandler(ConnectionHandler connectionHandler)

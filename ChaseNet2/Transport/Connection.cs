@@ -92,6 +92,10 @@ namespace ChaseNet2.Transport
 
         public NetworkMessage EnqueueMessage(MessageType type, ulong channelID, object obj)
         {
+            if (obj is null)
+            {
+                throw new Exception("Message content cannot be null");
+            }
             var message = new NetworkMessage(CurrentMessageId++, channelID, type, obj);
             if (type.HasFlag(MessageType.Priority))
             {
@@ -321,7 +325,7 @@ namespace ChaseNet2.Transport
                     // resend the message
                     msg.Value.LastSent = DateTime.UtcNow;
                     msg.Value.ResendCount++;
-                    OutgoingMessages.AddFirst(msg.Value.Message);
+                    OutgoingMessages.AddLast(msg.Value.Message);
                 }
 
                 if (msg.Value.IsSplit && msg.Value.Message.State == MessageState.Sent)

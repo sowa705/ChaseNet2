@@ -20,7 +20,14 @@
     </ItemGroup>
 
     <ItemGroup>
+      <ProjectReference Include="..\ChaseNet2.FileTransfer\ChaseNet2.FileTransfer.csproj" />
       <ProjectReference Include="..\ChaseNet2\ChaseNet2.csproj" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <None Update="dummyFile.bin">
+        <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+      </None>
     </ItemGroup>
 
 </Project>

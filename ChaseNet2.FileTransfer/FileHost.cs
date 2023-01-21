@@ -22,9 +22,6 @@ public class FileHost : ConnectionHandler, IMessageHandler
         Log.Information("Starting file host");
         Spec = await FileSpec.Create(FilePath);
         Stream = new FileStream(FilePath, FileMode.Open);
-
-        manager.Serializer.RegisterType(typeof(FilePartRequest));
-        manager.Serializer.RegisterType(typeof(FilePartResponse));
     }
 
     public override Task OnManagerConnect(Connection connection)
@@ -41,6 +38,10 @@ public class FileHost : ConnectionHandler, IMessageHandler
 
     public override void Update()
     {
+        if (Spec is null)
+        {
+            return;
+        }
         if (LastBroadcastTime.AddSeconds(2) < DateTime.UtcNow)
         {
             LastBroadcastTime = DateTime.UtcNow;
