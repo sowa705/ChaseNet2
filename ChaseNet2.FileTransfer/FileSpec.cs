@@ -26,7 +26,7 @@ public class FileSpec
         var parts = new List<FilePartSpec>();
         spec.Parts = parts;
 
-        var partSize = 1024 * 1024 * 2; //2 MB
+        var partSize = 1024 * 1024 * 12; //2 MB
         spec.PartSize = partSize;
 
         while (fs.Position < fs.Length)

@@ -28,7 +28,7 @@ public class ConnectionManagerTests
     {
         int port = Random.Shared.Next(10000, 20000);
         var first = new ConnectionManager(port);
-        first.AcceptNewConnections = true;
+        first.Settings.AcceptNewConnections = true;
         var second = new ConnectionManager();
 
         first.Serializer.RegisterType(typeof(DummyMessage));

@@ -21,19 +21,11 @@ namespace ChaseNet2.Transport
         public AsymmetricKeyParameter PublicKey { get => _keyPair.Public; }
         private UdpClient _client;
         public List<Connection> Connections { get; private set; }
-
         public List<ConnectionHandler> Handlers { get; private set; }
 
         private Random rng;
-        public bool AcceptNewConnections { get; set; }
         public NetworkStatistics Statistics { get; private set; }
         public SerializationManager Serializer { get; private set; }
-
-        /// <summary>
-        /// The rate at which background thread will update connections in updates per second.
-        /// Recommended value on tracker servers is 20, clients can use 60-120.
-        /// </summary>
-        public float TargetUpdateRate { get; set; } = 30;
 
         public TransportSettings Settings { get; set; }
 
@@ -124,7 +116,7 @@ namespace ChaseNet2.Transport
             {
                 var updateTime = await Update();
 
-                var sleepTime = TimeSpan.FromSeconds(1f / TargetUpdateRate);
+                var sleepTime = TimeSpan.FromSeconds(1f / Settings.TargetUpdateRate);
 
                 if (updateTime < sleepTime)
                 {
@@ -173,7 +165,7 @@ namespace ChaseNet2.Transport
                 Statistics.AveragePing = Connections.Average(x => x.AveragePing);
             }
 
-            if (tickCount >= TargetUpdateRate)
+            if (tickCount >= Settings.TargetUpdateRate)
             {
                 tickCount = 0;
 
@@ -214,7 +206,7 @@ namespace ChaseNet2.Transport
             {
                 Log.Logger.Information("Received connection request from {EndPoint}", remoteEP);
 
-                if (AcceptNewConnections)
+                if (Settings.AcceptNewConnections)
                 {
                     BinaryReader reader = new BinaryReader(ms);
 

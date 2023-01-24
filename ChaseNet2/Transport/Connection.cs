@@ -478,7 +478,7 @@ namespace ChaseNet2.Transport
             int contentSize = serializedMessage.Length;
             _trackedSentMessages[message.ID].IsSplit = true;
 
-            int fragmentSize = (int)(_manager.Settings.MaximumTransmissionUnit / 4f);
+            int fragmentSize = (int)(_manager.Settings.MaximumTransmissionUnit / 3f);
 
             for (int i = 0; i < contentSize; i += fragmentSize)
             {

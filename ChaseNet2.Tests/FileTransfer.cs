@@ -124,5 +124,8 @@ public class FileTransfer
         
         // assert
         Assert.True(File.Exists("tmp.bin"));
+        var original = File.ReadAllBytes("test.bin");
+        var downloaded = File.ReadAllBytes("tmp.bin");
+        Assert.True(downloaded.SequenceEqual(original));
     }
 }

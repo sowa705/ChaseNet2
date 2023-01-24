@@ -63,7 +63,7 @@ public class FileClient : ConnectionHandler
 
         var time = DateTime.UtcNow - LastReceivedPart;
 
-        Log.Information("Downloaded {0} of {1} parts ({2} mb/s)", CurrentTransfer.Progress.DownloadedParts.Count, CurrentTransfer.FileSpec.Parts.Count, (filePartResponse.Data.Length/1000000f/time.TotalSeconds*8f).ToString("0000"));
+        Log.Information("Downloaded {0} of {1} parts ({2} mb/s)", CurrentTransfer.Progress.DownloadedParts.Count, CurrentTransfer.FileSpec.Parts.Count, (filePartResponse.Data.Length/1000000f/time.TotalSeconds*8f).ToString("0.00"));
 
         if (CurrentTransfer.Progress.DownloadedParts.Count == CurrentTransfer.FileSpec.Parts.Count)
         {

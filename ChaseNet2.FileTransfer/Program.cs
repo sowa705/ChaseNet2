@@ -79,8 +79,8 @@ public class Program
         Manager.Serializer.RegisterType<FilePartSpec>();
         Manager.Serializer.RegisterType<FilePartRequest>();
         Manager.Serializer.RegisterType<FilePartResponse>();
-
-        NetworkThread();
+        Manager.Settings.TargetUpdateRate = 50;
+        Manager.StartBackgroundThread();
 
         Client.Connect();
 
@@ -116,16 +116,5 @@ public class Program
         var serialized = JsonSerializer.Serialize(spec, new JsonSerializerOptions { WriteIndented = true });
         var filename = spec.FileName + ".spec";
         await File.WriteAllTextAsync(filename, serialized);
-    }
-
-    public static async Task NetworkThread()
-    {
-        int counter = 0;
-        while (true)
-        {
-            await Task.Delay(50);
-            await Manager.Update();
-            counter++;
-        }
     }
 }

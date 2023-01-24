@@ -23,7 +23,7 @@ namespace ChaseNet2.Session
         public override Task OnAttached(ConnectionManager manager)
         {
             ConnectionManager = manager;
-            ConnectionManager.AcceptNewConnections = true;
+            ConnectionManager.Settings.AcceptNewConnections = true;
             return Task.CompletedTask;
         }
 
