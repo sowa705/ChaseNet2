@@ -26,13 +26,12 @@ namespace ChaseNet2.Transport
         private Random rng;
         public NetworkStatistics Statistics { get; private set; }
         public SerializationManager Serializer { get; private set; }
-
         public TransportSettings Settings { get; set; }
 
-        int tickCount = 0;
+        private int _tickCount = 0;
 
-        long lastSentBytes = 0;
-        private long lastReceivedBytes = 0;
+        private long _lastSentBytes = 0;
+        private long _lastReceivedBytes = 0;
 
         public ConnectionManager(int? port = null) : this(new TransportSettings(), port)
         {
@@ -131,7 +130,7 @@ namespace ChaseNet2.Transport
         {
             Stopwatch stopwatch = new Stopwatch();
             stopwatch.Start();
-            tickCount++;
+            _tickCount++;
 
             while (_client.Available > 0)
             {
@@ -165,15 +164,15 @@ namespace ChaseNet2.Transport
                 Statistics.AveragePing = Connections.Average(x => x.AveragePing);
             }
 
-            if (tickCount >= Settings.TargetUpdateRate)
+            if (_tickCount >= Settings.TargetUpdateRate)
             {
-                tickCount = 0;
+                _tickCount = 0;
 
-                Statistics.BitsSentPerSecond = (Statistics.BytesSent - lastSentBytes) * 8;
-                Statistics.BitsReceivedPerSecond = (Statistics.BytesReceived - lastReceivedBytes) * 8;
+                Statistics.BitsSentPerSecond = (Statistics.BytesSent - _lastSentBytes) * 8;
+                Statistics.BitsReceivedPerSecond = (Statistics.BytesReceived - _lastReceivedBytes) * 8;
 
-                lastSentBytes = Statistics.BytesSent;
-                lastReceivedBytes = Statistics.BytesReceived;
+                _lastSentBytes = Statistics.BytesSent;
+                _lastReceivedBytes = Statistics.BytesReceived;
             }
 
             return stopwatch.Elapsed;
