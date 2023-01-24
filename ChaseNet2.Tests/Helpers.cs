@@ -10,9 +10,9 @@ public class Helpers
     /// <param name="managers"></param>
     public static async Task UpdateManagers(params ConnectionManager[] managers)
     {
-        for (int i = 0; i < 200; i++)
+        for (int i = 0; i < 50; i++)
         {
-            await Task.Delay(5);
+            await Task.Delay(20);
             foreach (var manager in managers)
             {
                 await manager.Update();

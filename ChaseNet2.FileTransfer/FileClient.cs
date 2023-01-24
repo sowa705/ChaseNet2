@@ -13,6 +13,7 @@ public class FileClient : ConnectionHandler
     FileTransfer? CurrentTransfer;
 
     NetworkMessage? SentRequest;
+    private DateTime LastReceivedPart;
 
     public override Task OnAttached(ConnectionManager manager)
     {
@@ -60,7 +61,9 @@ public class FileClient : ConnectionHandler
         CurrentTransfer.DestinationStream.Write(filePartResponse.Data, 0, filePartResponse.Data.Length);
         CurrentTransfer.Progress.DownloadedParts.Add(filePartResponse.Offset);
 
-        Log.Information("Downloaded {0} of {1} parts", CurrentTransfer.Progress.DownloadedParts.Count, CurrentTransfer.FileSpec.Parts.Count);
+        var time = DateTime.UtcNow - LastReceivedPart;
+
+        Log.Information("Downloaded {0} of {1} parts ({2} mb/s)", CurrentTransfer.Progress.DownloadedParts.Count, CurrentTransfer.FileSpec.Parts.Count, (filePartResponse.Data.Length/1000000f/time.TotalSeconds*8f).ToString("0000"));
 
         if (CurrentTransfer.Progress.DownloadedParts.Count == CurrentTransfer.FileSpec.Parts.Count)
         {
@@ -74,6 +77,8 @@ public class FileClient : ConnectionHandler
         }
 
         SentRequest = null;
+        
+        LastReceivedPart = DateTime.UtcNow;
 
         // save progress
         var SerializedProgress = JsonConvert.SerializeObject(CurrentTransfer.Progress);
@@ -92,7 +97,7 @@ public class FileClient : ConnectionHandler
             FileSpec = fileSpec,
             DestinationStream = new FileStream(destinationPath, FileMode.Create, FileAccess.Write)
         };
-
+        LastReceivedPart = DateTime.UtcNow;
         // Check if there is some progress already
         var progressFile = new FileInfo(destinationPath + ".progress");
         if (progressFile.Exists)

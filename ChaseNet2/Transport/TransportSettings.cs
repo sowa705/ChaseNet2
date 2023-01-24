@@ -5,7 +5,7 @@ namespace ChaseNet2.Transport
         /// <summary>
         /// UDP socket buffer size, required for large packets
         /// </summary>
-        public int ReceiveBufferSize { get; set; } = 1024 * 1024 * 4;
+        public int ReceiveBufferSize { get; set; } = 1024 * 1024 * 16;
 
         /// <summary>
         /// Maximum number of bytes to send in a single message.
@@ -15,7 +15,7 @@ namespace ChaseNet2.Transport
         /// <summary>
         /// Throttles the number of messages sent per network tick.
         /// </summary>
-        public int MaxBytesSentPerUpdate { get; set; } = 1024 * 1024 * 4;
+        public int MaxBytesSentPerUpdate { get; set; } = 1024 * 1024 * 16;
 
         /// <summary>
         /// Max size of a UDP packet sent over the network.
