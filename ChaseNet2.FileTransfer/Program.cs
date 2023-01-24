@@ -29,7 +29,8 @@ public class Program
 
             while (true)
             {
-                await Task.Delay(200);
+                await Task.Delay(5000);
+                Log.Information("Stats: {0}",Manager.Statistics.ToString());
             }
         }
 
@@ -91,12 +92,22 @@ public class Program
 
     private static void InitLogger()
     {
-        Logger logger = new LoggerConfiguration()
-            .MinimumLevel.Information()
-            .WriteTo.Console()
-            .CreateLogger();
-
-        Log.Logger = logger;
+        if (Debugger.IsAttached)
+        {
+            Logger logger = new LoggerConfiguration()
+                .MinimumLevel.Debug()
+                .WriteTo.Console()
+                .CreateLogger();
+            Log.Logger = logger;
+        }
+        else
+        {
+            Logger logger = new LoggerConfiguration()
+                .MinimumLevel.Information()
+                .WriteTo.Console()
+                .CreateLogger();
+            Log.Logger = logger;
+        }
     }
 
     private static async Task CreateSpec(string[] args)

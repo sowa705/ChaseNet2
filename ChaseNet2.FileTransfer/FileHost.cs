@@ -69,12 +69,12 @@ public class FileHost : ConnectionHandler, IMessageHandler
                 part.Offset = request.Offset;
 
                 long totalFileSize = Spec.Parts.Sum(x => x.Size);
-                int length = Math.Min(Spec.PartSize, (int)(totalFileSize - request.Offset));
+                long length = Math.Min(Spec.PartSize, (long)(totalFileSize - request.Offset));
 
                 var buffer = new byte[length];
 
                 Stream.Seek(request.Offset, SeekOrigin.Begin);
-                Stream.Read(buffer, 0, length);
+                Stream.Read(buffer, 0, (int)length);
 
                 part.Data = buffer;
 
