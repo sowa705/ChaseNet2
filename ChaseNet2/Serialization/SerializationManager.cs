@@ -18,7 +18,13 @@ namespace ChaseNet2.Serialization
     public class SerializationManager
     {
         Dictionary<ulong, Type> TypeIDs = new Dictionary<ulong, Type>();
-        public static bool SurrogatesRegistered = false;
+
+        RuntimeTypeModel _runtimeTypeModel;
+
+        public SerializationManager()
+        {
+            _runtimeTypeModel = RuntimeTypeModel.Create();
+        }
 
         public ulong RegisterType<T>(bool useFullName = true)
         {
@@ -60,13 +66,8 @@ namespace ChaseNet2.Serialization
             RegisterType(typeof(JoinSessionResponse));
             RegisterType(typeof(SessionUpdate));
 
-            if (SurrogatesRegistered)
-                return;
-
-            RuntimeTypeModel.Default.Add<AsymmetricKeyParameter>().SetSurrogate(typeof(AsymmetricKeyParameterSurrogate));
-            RuntimeTypeModel.Default.Add<IPEndPoint>().SetSurrogate(typeof(IPEndPointSurrogate));
-
-            SurrogatesRegistered = true;
+            _runtimeTypeModel.Add<AsymmetricKeyParameter>().SetSurrogate(typeof(AsymmetricKeyParameterSurrogate));
+            _runtimeTypeModel.Add<IPEndPoint>().SetSurrogate(typeof(IPEndPointSurrogate));
         }
 
         /// <summary>
@@ -87,7 +88,7 @@ namespace ChaseNet2.Serialization
 
             // write data
             var protostream = new MemoryStream();
-            ProtoBuf.Serializer.Serialize(protostream, obj);
+            _runtimeTypeModel.Serialize(protostream, obj);
 
             var data = protostream.ToArray();
             writer.Write(data.Length);
@@ -119,7 +120,7 @@ namespace ChaseNet2.Serialization
             var length = reader.ReadInt32();
             var data = reader.ReadBytes(length);
 
-            var obj = ProtoBuf.Serializer.Deserialize(type, new MemoryStream(data));
+            var obj = _runtimeTypeModel.Deserialize(type, new MemoryStream(data));
 
             if (obj is null)
             {
