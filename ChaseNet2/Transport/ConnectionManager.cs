@@ -64,7 +64,7 @@ namespace ChaseNet2.Transport
 
             foreach (var h in Handlers)
             {
-                await h.OnManagerConnect(c);
+                await h.OnConnectionAttached(c);
             }
 
             return c;
@@ -101,7 +101,7 @@ namespace ChaseNet2.Transport
         public void AttachHandler(ConnectionHandler connectionHandler)
         {
             Handlers.Add(connectionHandler);
-            connectionHandler.OnAttached(this).Wait();
+            connectionHandler.OnHandlerAttached(this).Wait();
         }
 
         public void DetachHandler(ConnectionHandler connectionHandler)
@@ -134,7 +134,17 @@ namespace ChaseNet2.Transport
 
             while (_client.Available > 0)
             {
-                ProcessIncomingPacket();
+                IPEndPoint remoteEp=new IPEndPoint(IPAddress.Any, 0);
+                try
+                {
+                    var data = _client.Receive(ref remoteEp);
+                    
+                    ProcessIncomingPacket(remoteEp, data);
+                }
+                catch (Exception e)
+                {
+                    Log.Logger.Error("Error receiving packet: {0}", e);
+                }
             }
 
             // update all connections on async worker threads
@@ -145,7 +155,7 @@ namespace ChaseNet2.Transport
             {
                 foreach (var connection in Connections.Where(x => handler.ShouldHandle(x.ConnectionId)))
                 {
-                    handler.ConnectionUpdate(connection);
+                    handler.OnConnectionUpdated(connection);
                 }
             }
 
@@ -153,7 +163,7 @@ namespace ChaseNet2.Transport
 
             foreach (var handler in Handlers)
             {
-                handler.Update();
+                handler.OnManagerUpdated();
             }
 
             stopwatch.Stop();
@@ -178,20 +188,8 @@ namespace ChaseNet2.Transport
             return stopwatch.Elapsed;
         }
 
-        void ProcessIncomingPacket()
+        public void ProcessIncomingPacket(IPEndPoint remoteEp, byte[] data)
         {
-            var remoteEP = new IPEndPoint(IPAddress.Any, 0);
-            byte[] data;
-            try
-            {
-                data = _client.Receive(ref remoteEP);
-            }
-            catch (Exception e)
-            {
-                Log.Logger.Error("Error receiving packet: {0}", e);
-                return;
-            }
-
             var targetConnection = BitConverter.ToUInt64(data, 0);
 
             Statistics.BytesReceived += data.Length;
@@ -203,7 +201,7 @@ namespace ChaseNet2.Transport
 
             if (targetConnection == 0xADDDDDDDD)
             {
-                Log.Logger.Information("Received connection request from {EndPoint}", remoteEP);
+                Log.Logger.Information("Received connection request from {EndPoint}", remoteEp);
 
                 if (Settings.AcceptNewConnections)
                 {
@@ -221,7 +219,7 @@ namespace ChaseNet2.Transport
 
                         var attachTask = AttachConnectionAsync(new ConnectionTarget()
                         {
-                            EndPoint = remoteEP,
+                            EndPoint = remoteEp,
                             PublicKey = request.PublicKey,
                             ConnectionId = request.ConnectionId
                         });
@@ -230,7 +228,7 @@ namespace ChaseNet2.Transport
 
                         connection.SendConnectionResponse();
 
-                        Log.Logger.Information("Attached a new connection from {EndPoint} with id {ConnectionId}", remoteEP, request.ConnectionId);
+                        Log.Logger.Information("Attached a new connection from {EndPoint} with id {ConnectionId}", remoteEp, request.ConnectionId);
                     }
                     catch (Exception e)
                     {
@@ -239,13 +237,13 @@ namespace ChaseNet2.Transport
                 }
                 else
                 {
-                    Log.Logger.Warning("Received connection request from {EndPoint} but new connections are not accepted", remoteEP);
+                    Log.Logger.Warning("Received connection request from {EndPoint} but new connections are not accepted", remoteEp);
                 }
                 return;
             }
             if (targetConnection == 0xBDDDDDDDD) // we got a connection response
             {
-                Log.Logger.Information("Received connection response from {EndPoint}", remoteEP);
+                Log.Logger.Information("Received connection response from {EndPoint}", remoteEp);
                 // read connection response
                 BinaryReader reader = new BinaryReader(ms);
                 try
@@ -253,12 +251,12 @@ namespace ChaseNet2.Transport
                     ConnectionResponse response = Serializer.Deserialize<ConnectionResponse>(reader);
                     if (!response.Accepted)
                     {
-                        Log.Logger.Warning("Connection request was rejected by {EndPoint} :(", remoteEP);
+                        Log.Logger.Warning("Connection request was rejected by {EndPoint} :(", remoteEp);
                     }
                     var connection = Connections.Find(x => x.ConnectionId == response.ConnectionId);
                     connection.SetPeerPublicKey(response.PublicKey);
                     connection.SetState(ConnectionState.Connected);
-                    Log.Logger.Information("Connection {ConnectionID} established with {EndPoint}", response.ConnectionId, remoteEP);
+                    Log.Logger.Information("Connection {ConnectionID} established with {EndPoint}", response.ConnectionId, remoteEp);
                 }
                 catch (Exception e)
                 {

@@ -7,5 +7,7 @@ namespace ChaseNet2
 
         SessionJoin = 201,
         TrackerInternal = 202,
+        
+        Relay = 301,
     }
 }

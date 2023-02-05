@@ -28,7 +28,7 @@ namespace ChaseNet2.Transport
         public float SimulatedPacketLoss { get; set; } = 0;
         
         /// <summary>
-        /// 
+        /// Accept receiving new connection requests
         /// </summary>
         public bool AcceptNewConnections { get; set; } = false;
         
@@ -37,5 +37,10 @@ namespace ChaseNet2.Transport
         /// Recommended value on tracker servers is 20, clients can use 60-120.
         /// </summary>
         public float TargetUpdateRate { get; set; } = 30;
+
+        /// <summary>
+        /// Allow relaying messages between different peers for NAT networks, enable on tracker servers for higher connection success rate
+        /// </summary>
+        public bool AllowRelayConnections { get; set; } = false;
     }
 }

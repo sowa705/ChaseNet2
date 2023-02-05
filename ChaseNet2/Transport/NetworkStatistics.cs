@@ -6,8 +6,8 @@ namespace ChaseNet2.Transport
     {
         public int PacketsSent { get; set; }
         public int PacketsReceived { get; set; }
-        public int BytesSent { get; set; }
-        public int BytesReceived { get; set; }
+        public long BytesSent { get; set; }
+        public long BytesReceived { get; set; }
         public TimeSpan AverageUpdateTime { get; set; }
         public int ConnectionCount { get; set; }
         public float AveragePing { get; set; }

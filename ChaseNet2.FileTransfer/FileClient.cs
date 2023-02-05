@@ -15,18 +15,18 @@ public class FileClient : ConnectionHandler
     NetworkMessage? SentRequest;
     private DateTime LastReceivedPart;
 
-    public override Task OnAttached(ConnectionManager manager)
+    public override Task OnHandlerAttached(ConnectionManager manager)
     {
         return Task.CompletedTask;
     }
 
-    public override Task OnManagerConnect(Connection connection)
+    public override Task OnConnectionAttached(Connection connection)
     {
         AddConnection(connection.ConnectionId);
         return Task.CompletedTask;
     }
 
-    public override void ConnectionUpdate(Connection connection)
+    public override void OnConnectionUpdated(Connection connection)
     {
         while (connection.IncomingMessages.TryDequeue(out var message))
         {
@@ -111,7 +111,7 @@ public class FileClient : ConnectionHandler
         }
     }
 
-    public override void Update()
+    public override void OnManagerUpdated()
     {
         if (CurrentTransfer == null) return;
 

@@ -23,6 +23,7 @@ namespace ChaseNet2.Transport
 
         public IPEndPoint RemoteEndpoint;
         private ConnectionManager _manager;
+        public ConnectionManager Manager { get => _manager; }
 
         public ConnectionState State { get; private set; }
         private byte[] _sharedKey;
@@ -35,8 +36,6 @@ namespace ChaseNet2.Transport
         Dictionary<ulong, SplitReceivedMessage> _splitReceivedMessages;
 
         LinkedList<ulong> _ReceivedMessageIds;
-
-
         public ulong CurrentMessageId { get; private set; }
 
         private Random _rng;

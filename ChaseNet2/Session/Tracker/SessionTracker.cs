@@ -20,14 +20,14 @@ namespace ChaseNet2.Session
             Connections = new List<TrackerConnection>();
         }
 
-        public override Task OnAttached(ConnectionManager manager)
+        public override Task OnHandlerAttached(ConnectionManager manager)
         {
             ConnectionManager = manager;
             ConnectionManager.Settings.AcceptNewConnections = true;
             return Task.CompletedTask;
         }
 
-        public override async Task OnManagerConnect(Connection connection)
+        public override async Task OnConnectionAttached(Connection connection)
         {
             var c = new TrackerConnection() { Connection = connection, SessionTracker = this };
             Connections.Add(c);
@@ -35,7 +35,7 @@ namespace ChaseNet2.Session
             c.HandleNewConnection();
         }
 
-        public override void ConnectionUpdate(Connection connection)
+        public override void OnConnectionUpdated(Connection connection)
         {
             var trackerConnection = Connections.Find(c => c.Connection == connection);
 
@@ -45,7 +45,7 @@ namespace ChaseNet2.Session
             }
         }
 
-        public override void Update()
+        public override void OnManagerUpdated()
         {
             var connectionsToRemove = Connections.Where(x => x.Connection.State == ConnectionState.Disconnected);
             foreach (var connection in connectionsToRemove)
