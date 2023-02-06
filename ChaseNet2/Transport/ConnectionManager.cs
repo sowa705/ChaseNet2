@@ -26,6 +26,7 @@ namespace ChaseNet2.Transport
         private Random rng;
         public NetworkStatistics Statistics { get; private set; }
         public SerializationManager Serializer { get; private set; }
+        public IUnknownConnectionHandler? UnknownConnectionHandler { get; set; }
         public TransportSettings Settings { get; set; }
 
         private int _tickCount = 0;
@@ -268,6 +269,7 @@ namespace ChaseNet2.Transport
 
             if (c is null)
             {
+                UnknownConnectionHandler?.OnMessageFromUnknownConnectionReceived(targetConnection,remoteEp,ms);
                 return;
             }
             c.ReadInputStream(ms);
