@@ -8,16 +8,28 @@ namespace ChaseNet2.Transport
     {
         public List<ulong> ConnectionIDs = new List<ulong>();
 
-        public abstract Task OnAttached(ConnectionManager manager);
+        /// <summary>
+        /// Called when the connection handler gets attached to the manager
+        /// </summary>
+        /// <param name="manager"></param>
+        /// <returns></returns>
+        public abstract Task OnHandlerAttached(ConnectionManager manager);
 
         /// <summary>
         /// Called when ConnectionManager gets a new incoming connection on all handlers
         /// </summary>
-        public abstract Task OnManagerConnect(Connection connection);
+        public abstract Task OnConnectionAttached(Connection connection);
 
-        public abstract void ConnectionUpdate(Connection connection);
+        /// <summary>
+        /// Called after connection has updated
+        /// </summary>
+        /// <param name="connection"></param>
+        public abstract void OnConnectionUpdated(Connection connection);
 
-        public abstract void Update();
+        /// <summary>
+        /// Called on manager update
+        /// </summary>
+        public abstract void OnManagerUpdated();
 
         public void AddConnection(ulong ConnectionID)
         {

@@ -51,8 +51,13 @@ namespace ChaseNet2.Transport
 
                             connection.AveragePing = (connection.AveragePing + (float)pingTime.TotalMilliseconds) / 2; // simple moving average
                             connection.LastReceivedPong = DateTime.UtcNow;
+                            
+                            if (connection.ConnectivityStatus == ConnectivityStatus.Unknown)
+                            {
+                                connection.ConnectivityStatus = ConnectivityStatus.Ok;
+                            }
 
-                            connection.State = ConnectionState.Connected; // ping came back so obviously we are connected
+                            connection.Status = ConnectionStatus.Connected; // ping came back so obviously we are connected
                         }
                         break;
                     case SplitMessagePart splitMessagePart:

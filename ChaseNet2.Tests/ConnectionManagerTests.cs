@@ -47,7 +47,7 @@ public class ConnectionManagerTests
         var (first, second, connection) = await GetConnectedManagers();
 
         // Assert
-        Assert.True(connection.State == ConnectionState.Connected);
+        Assert.True(connection.Status == ConnectionStatus.Connected);
     }
 
     [Theory]

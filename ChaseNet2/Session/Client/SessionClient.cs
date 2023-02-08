@@ -30,22 +30,22 @@ namespace ChaseNet2.Session
             _trackerConnection.RegisterMessageHandler((ulong)InternalChannelType.TrackerInternal, new SessionClientMessageHandler(this));
         }
 
-        public override Task OnAttached(ConnectionManager manager)
+        public override Task OnHandlerAttached(ConnectionManager manager)
         {
             return Task.CompletedTask;
         }
 
-        public override Task OnManagerConnect(Connection connection) // client does not accept incoming connections so we don't need to do anything here
+        public override Task OnConnectionAttached(Connection connection) // client does not accept incoming connections so we don't need to do anything here
         {
             return Task.CompletedTask;
         }
 
-        public override void ConnectionUpdate(Connection connection)
+        public override void OnConnectionUpdated(Connection connection)
         {
 
         }
 
-        public override void Update()
+        public override void OnManagerUpdated()
         {
         }
 
@@ -99,7 +99,7 @@ namespace ChaseNet2.Session
             }
             foreach (var connection in ConnectionsToRemove)
             {
-                if (connection == 0 || connection == _trackerConnection.ConnectionId) // this is us
+                if (connection == 0 || connection == _trackerConnection.ConnectionId)
                     continue;
                 _connectionManager.RemoveConnection(connection);
                 RemoveConnection(connection);

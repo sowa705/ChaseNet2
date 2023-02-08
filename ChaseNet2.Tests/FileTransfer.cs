@@ -87,8 +87,8 @@ public class FileTransfer
         Assert.True(hostCM.Connections.Count == 2);
         Assert.True(clientCM.Connections.Count == 2);
         
-        Assert.True(hostCM.Connections.TrueForAll(x=>x.State==ConnectionState.Connected));
-        Assert.True(clientCM.Connections.TrueForAll(x=>x.State==ConnectionState.Connected));
+        Assert.True(hostCM.Connections.TrueForAll(x=>x.Status==ConnectionStatus.Connected));
+        Assert.True(clientCM.Connections.TrueForAll(x=>x.Status==ConnectionStatus.Connected));
     }
     
     [Fact]

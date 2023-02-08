@@ -23,8 +23,10 @@ namespace ChaseNet2.Transport
 
         public IPEndPoint RemoteEndpoint;
         private ConnectionManager _manager;
+        public ConnectionManager Manager { get => _manager; }
 
-        public ConnectionState State { get; private set; }
+        public ConnectionStatus Status { get; private set; }
+        public ConnectivityStatus ConnectivityStatus { get; private set; }
         private byte[] _sharedKey;
 
         public ConcurrentQueue<NetworkMessage> IncomingMessages { get; private set; }
@@ -33,20 +35,17 @@ namespace ChaseNet2.Transport
         Dictionary<ulong, SentMessage> _trackedSentMessages;
         // Messages that are waiting for other parts to arrive
         Dictionary<ulong, SplitReceivedMessage> _splitReceivedMessages;
-
+        
         LinkedList<ulong> _ReceivedMessageIds;
-
-
         public ulong CurrentMessageId { get; private set; }
 
         private Random _rng;
-
         public DateTime LastPing { get; private set; }
         public DateTime LastReceivedPong { get; private set; }
 
         public int RandomPingNumber { get; private set; }
 
-        public float AveragePing { get; private set; }
+        public float AveragePing { get; private set; } = 300;
 
         public DateTime LastConnectionAttempt { get; private set; }
         int ConnectionRetryCount;
@@ -210,13 +209,13 @@ namespace ChaseNet2.Transport
                 var preamble = reader.ReadInt32();
                 if (preamble != 0x12345678)
                 {
-                    Log.Logger.Warning("Received an invalid packet preamble");
+                    Log.Warning("Received an invalid packet preamble");
                     return;
                 }
             }
             catch (Exception e)
             {
-                Log.Logger.Warning("Received an invalid packet ({e})", e);
+                Log.Warning("Received an invalid packet ({e})", e);
                 return;
             }
 
@@ -255,7 +254,7 @@ namespace ChaseNet2.Transport
 
             if (_ReceivedMessageIds.Contains(message.ID))
             {
-                Log.Logger.Debug("Received a duplicate message {messageID}", message.ID);
+                Log.Debug("Received a duplicate message {messageID}", message.ID);
                 return;
             }
 
@@ -281,14 +280,14 @@ namespace ChaseNet2.Transport
 
         public void Update()
         {
-            if (State == ConnectionState.Started && LastConnectionAttempt.AddSeconds(3) < DateTime.UtcNow)
+            if (Status == ConnectionStatus.Started && LastConnectionAttempt.AddSeconds(3) < DateTime.UtcNow)
             {
                 LastConnectionAttempt = DateTime.UtcNow;
                 ConnectionRetryCount++;
                 if (ConnectionRetryCount > 5)
                 {
-                    State = ConnectionState.Disabled;
-                    Log.Logger.Error("Failed to connect to peer");
+                    Status = ConnectionStatus.Disabled;
+                    Log.Error("Failed to connect to peer");
                     return;
                 }
                 CreateConnectMessage();
@@ -302,10 +301,19 @@ namespace ChaseNet2.Transport
                 EnqueueInternalMessage(MessageType.Priority, p);
             }
 
-            if (LastReceivedPong + TimeSpan.FromSeconds(10) < DateTime.UtcNow && (State != ConnectionState.Started && State != ConnectionState.Disconnected))
+            if (LastReceivedPong + TimeSpan.FromSeconds(6) < DateTime.UtcNow && (Status != ConnectionStatus.Started && Status != ConnectionStatus.Disconnected))
             {
+                if (ConnectivityStatus == ConnectivityStatus.Unknown)
+                {
+                    ConnectivityStatus = ConnectivityStatus.None;
+                }
                 Log.Logger.Warning("Lost connection {0}, trying to reconnect", ConnectionId);
-                State = ConnectionState.Disconnected; // we haven't received a pong in 5 seconds so we are probably disconnected
+                Status = ConnectionStatus.Disconnected; // we haven't received a pong in 5 seconds so we are probably disconnected
+            }
+
+            if (ConnectivityStatus == ConnectivityStatus.None)
+            {
+                
             }
 
             // check for messages that need to be resent
@@ -501,9 +509,9 @@ namespace ChaseNet2.Transport
             }
         }
 
-        public void SetState(ConnectionState state)
+        public void SetState(ConnectionStatus status)
         {
-            State = state;
+            Status = status;
         }
     }
 }

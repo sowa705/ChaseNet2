@@ -17,14 +17,14 @@ public class FileHost : ConnectionHandler, IMessageHandler
         LastBroadcastTime = DateTime.UtcNow;
     }
 
-    public override async Task OnAttached(ConnectionManager manager)
+    public override async Task OnHandlerAttached(ConnectionManager manager)
     {
         Log.Information("Starting file host");
         Spec = await FileSpec.Create(FilePath);
         Stream = new FileStream(FilePath, FileMode.Open);
     }
 
-    public override Task OnManagerConnect(Connection connection)
+    public override Task OnConnectionAttached(Connection connection)
     {
         connection.RegisterMessageHandler(997, this);
         Connections.Add(connection);
@@ -32,11 +32,11 @@ public class FileHost : ConnectionHandler, IMessageHandler
         return Task.CompletedTask;
     }
 
-    public override void ConnectionUpdate(Connection connection)
+    public override void OnConnectionUpdated(Connection connection)
     {
     }
 
-    public override void Update()
+    public override void OnManagerUpdated()
     {
         if (Spec is null)
         {

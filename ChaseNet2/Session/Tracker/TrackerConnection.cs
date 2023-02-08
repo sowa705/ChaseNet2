@@ -44,7 +44,7 @@ namespace ChaseNet2.Session
                     _sessionUpdateMessage = Connection.EnqueueMessage(MessageType.Reliable, (ulong)InternalChannelType.TrackerInternal, sessionUpdate);
                 }
 
-                if (Connection.State == ConnectionState.Disconnected)
+                if (Connection.Status == ConnectionStatus.Disconnected)
                 {
                     State = TrackerConnectionState.LostConnection;
                 }
