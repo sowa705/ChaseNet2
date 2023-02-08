@@ -10,6 +10,7 @@ namespace ChaseNet2.Transport
         public MessageType Type { get; set; }
         public object Content { get; set; }
         public MessageState State { get; set; }
+        public Type ContentType { get => Content.GetType(); }
 
 
         public NetworkMessage(ulong id, ulong channelId, MessageType type, object content)

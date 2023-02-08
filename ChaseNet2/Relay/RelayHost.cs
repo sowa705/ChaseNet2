@@ -21,7 +21,7 @@ namespace ChaseNet2.Relay
         {
             foreach (var connection in _manager.Connections)
             {
-                if (connection.RemoteEndpoint.Address == endPoint.Address)
+                if (connection.RemoteEndpoint.Equals(endPoint))
                 {
                     return true;
                 }

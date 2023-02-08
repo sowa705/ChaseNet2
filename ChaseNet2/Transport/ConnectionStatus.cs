@@ -1,6 +1,6 @@
 ﻿namespace ChaseNet2.Transport
 {
-    public enum ConnectionState
+    public enum ConnectionStatus
     {
         Started,
         Connected,

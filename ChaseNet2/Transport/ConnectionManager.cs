@@ -256,7 +256,7 @@ namespace ChaseNet2.Transport
                     }
                     var connection = Connections.Find(x => x.ConnectionId == response.ConnectionId);
                     connection.SetPeerPublicKey(response.PublicKey);
-                    connection.SetState(ConnectionState.Connected);
+                    connection.SetState(ConnectionStatus.Connected);
                     Log.Logger.Information("Connection {ConnectionID} established with {EndPoint}", response.ConnectionId, remoteEp);
                 }
                 catch (Exception e)

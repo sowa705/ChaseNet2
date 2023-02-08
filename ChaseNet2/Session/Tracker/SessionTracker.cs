@@ -47,12 +47,12 @@ namespace ChaseNet2.Session
 
         public override void OnManagerUpdated()
         {
-            var connectionsToRemove = Connections.Where(x => x.Connection.State == ConnectionState.Disconnected);
+            var connectionsToRemove = Connections.Where(x => x.Connection.Status == ConnectionStatus.Disconnected);
             foreach (var connection in connectionsToRemove)
             {
                 ConnectionManager.RemoveConnection(connection.Connection.ConnectionId);
             }
-            Connections.RemoveAll(x => x.Connection.State == ConnectionState.Disconnected);
+            Connections.RemoveAll(x => x.Connection.Status == ConnectionStatus.Disconnected);
         }
     }
 }
