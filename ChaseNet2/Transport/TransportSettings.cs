@@ -20,7 +20,7 @@ namespace ChaseNet2.Transport
         /// <summary>
         /// Max size of a UDP packet sent over the network.
         /// </summary>
-        public int MaximumTransmissionUnit { get; set; } = 32768;
+        public int MaximumTransmissionUnit { get; set; } = 1300;
 
         /// <summary>
         /// Simulated packet loss from 0 to 1
@@ -31,6 +31,7 @@ namespace ChaseNet2.Transport
         /// 
         /// </summary>
         public bool AcceptNewConnections { get; set; } = false;
+        public int MaximumConnections { get; set; } = 16; // default is maximum limit, can be changed according to your needs.
         
         /// <summary>
         /// The rate at which background thread will update connections in updates per second.

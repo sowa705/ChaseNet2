@@ -33,6 +33,7 @@ namespace ChaseNet2.Transport
         Dictionary<ulong, SentMessage> _trackedSentMessages;
         // Messages that are waiting for other parts to arrive
         Dictionary<ulong, SplitReceivedMessage> _splitReceivedMessages;
+        Dictionary<ulong, ulong> _sequencedMessageIds;
 
         LinkedList<ulong> _ReceivedMessageIds;
 
@@ -73,6 +74,7 @@ namespace ChaseNet2.Transport
             _trackedSentMessages = new Dictionary<ulong, SentMessage>();
             _splitReceivedMessages = new Dictionary<ulong, SplitReceivedMessage>();
             _ReceivedMessageIds = new LinkedList<ulong>();
+            _sequencedMessageIds = new Dictionary<ulong, ulong>();
 
             LastPing = DateTime.UtcNow;
             LastReceivedPong = DateTime.UtcNow;
@@ -95,6 +97,11 @@ namespace ChaseNet2.Transport
             if (obj is null)
             {
                 throw new Exception("Message content cannot be null");
+            }
+
+            if (type.HasFlag(MessageType.Reliable) && type.HasFlag(MessageType.Sequenced))
+            {
+                throw new NotImplementedException("Cannot create a message with reliable and sequenced type"); //TODO: implement this in the future
             }
             var message = new NetworkMessage(CurrentMessageId++, channelID, type, obj);
             if (type.HasFlag(MessageType.Priority))
@@ -252,6 +259,26 @@ namespace ChaseNet2.Transport
         private void RouteReceivedMessage(NetworkMessage message)
         {
             message.State = MessageState.Received;
+
+            if (message.Type.HasFlag(MessageType.Sequenced))
+            {
+                if (message.Type.HasFlag(MessageType.Reliable))
+                {
+                    Log.Logger.Error("Received unsupported Reliable+Sequenced message {messageId}", message.ID);
+                    return;
+                }
+
+                _sequencedMessageIds.TryAdd(message.ChannelID, 0);
+
+                var currentSeqId = _sequencedMessageIds[message.ChannelID];
+
+                if (message.ID <= currentSeqId) // we already have a newer message/this is a duplicate
+                {
+                    Log.Logger.Debug("Received duplicate sequenced+unsequenced messsage {currentSeqId}", currentSeqId);
+                    return;
+                }
+                _sequencedMessageIds[message.ChannelID] = message.ID;
+            }
 
             if (_ReceivedMessageIds.Contains(message.ID))
             {

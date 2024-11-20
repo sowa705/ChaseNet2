@@ -17,9 +17,10 @@ namespace ChaseNet2.Transport
         /// Will be prioritized when sending messages.
         /// </summary>
         Priority = 2,
+        Sequenced = 4,
         /// <summary>
         /// Bulk transfer insensitive to latency.
         /// </summary>
-        Bulk = 4,
+        Bulk = 8,
     }
 }

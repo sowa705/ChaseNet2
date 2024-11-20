@@ -206,7 +206,7 @@ namespace ChaseNet2.Transport
             {
                 Log.Logger.Information("Received connection request from {EndPoint}", remoteEP);
 
-                if (Settings.AcceptNewConnections)
+                if (Settings.AcceptNewConnections && Settings.MaximumConnections > Connections.Count)
                 {
                     BinaryReader reader = new BinaryReader(ms);
 
