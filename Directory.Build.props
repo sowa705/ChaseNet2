@@ -1,6 +1,6 @@
 <Project>
     <PropertyGroup>
-        <Version>0.1.4</Version>
+        <Version>0.1.5</Version>
         <TargetFramework>net9.0</TargetFramework>
         <LangVersion>12</LangVersion>
         <Authors>Łukasz Sowa</Authors>
@@ -8,5 +8,6 @@
         <IncludeSymbols>true</IncludeSymbols>
         <SymbolPackageFormat>snupkg</SymbolPackageFormat>
         <PackageLicenseExpression>LGPL-2.1-only</PackageLicenseExpression>
+        <PackageReadmeFile>..\README.md</PackageReadmeFile>
     </PropertyGroup>
 </Project>

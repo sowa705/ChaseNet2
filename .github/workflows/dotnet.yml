@@ -33,7 +33,4 @@ jobs:
     
     - name: Push
       run: dotnet nuget push ChaseNet2/**/*.nupkg --api-key ${{ secrets.NUGET_KEY }} --source https://api.nuget.org/v3/index.json
-      
-    - name: Push symbols
-      run: dotnet nuget push ChaseNet2/**/*.snupkg --api-key ${{ secrets.NUGET_KEY }} --source https://api.nuget.org/v3/index.json
 
