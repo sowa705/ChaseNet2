@@ -1,0 +1,12 @@
+<Project>
+    <PropertyGroup>
+        <Version>0.1.4</Version>
+        <TargetFramework>net9.0</TargetFramework>
+        <LangVersion>12</LangVersion>
+        <Authors>Łukasz Sowa</Authors>
+        <Company>Sowa Systems</Company>
+        <IncludeSymbols>true</IncludeSymbols>
+        <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+        <PackageLicenseExpression>LGPL-2.1-only</PackageLicenseExpression>
+    </PropertyGroup>
+</Project>

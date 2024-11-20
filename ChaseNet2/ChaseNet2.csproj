@@ -1,14 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
     <PropertyGroup>
-        <TargetFramework>netstandard2.1</TargetFramework>
         <Nullable>enable</Nullable>
-        <Version>0.1.3</Version>
         <PackageId>Sowa705.ChaseNet2</PackageId>
-        <Authors>Łukasz Sowa</Authors>
-        <Company>Sowa Systems</Company>
-        <IncludeSymbols>true</IncludeSymbols>
-        <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+        <Description>Peer to peer network transport system</Description>
     </PropertyGroup>
 
     <ItemGroup>
