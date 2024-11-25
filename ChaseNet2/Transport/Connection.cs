@@ -28,7 +28,9 @@ namespace ChaseNet2.Transport
         private byte[] _sharedKey;
 
         public ConcurrentQueue<NetworkMessage> IncomingMessages { get; private set; }
-        LinkedList<NetworkMessage> OutgoingMessages { get; set; }
+
+        LinkedList<NetworkMessage> OutgoingPriorityMessages { get; set; }
+        LinkedList<NetworkMessage> OutgoingNonPriorityMessages { get; set; }
 
         Dictionary<ulong, SentMessage> _trackedSentMessages;
         // Messages that are waiting for other parts to arrive
@@ -68,7 +70,8 @@ namespace ChaseNet2.Transport
             }
 
             IncomingMessages = new ConcurrentQueue<NetworkMessage>();
-            OutgoingMessages = new LinkedList<NetworkMessage>();
+            OutgoingPriorityMessages = new LinkedList<NetworkMessage>();
+            OutgoingNonPriorityMessages = new LinkedList<NetworkMessage>();
             MessageHandlers = new Dictionary<ulong, IMessageHandler>();
 
             _trackedSentMessages = new Dictionary<ulong, SentMessage>();
@@ -104,11 +107,11 @@ namespace ChaseNet2.Transport
             var message = new NetworkMessage(CurrentMessageId++, channelID, type, obj);
             if (type.HasFlag(MessageType.Priority))
             {
-                OutgoingMessages.AddFirst(message);
+                OutgoingPriorityMessages.AddLast(message);
             }
             else
             {
-                OutgoingMessages.AddLast(message);
+                OutgoingNonPriorityMessages.AddLast(message);
             }
 
             if (message.Type.HasFlag(MessageType.Reliable)) //we need to track this message for later
@@ -350,7 +353,14 @@ namespace ChaseNet2.Transport
                     // resend the message
                     msg.Value.LastSent = DateTime.UtcNow;
                     msg.Value.ResendCount++;
-                    OutgoingMessages.AddLast(msg.Value.Message);
+                    if (msg.Value.Message.Type.HasFlag(MessageType.Priority))
+                    {
+                        OutgoingPriorityMessages.AddLast(msg.Value.Message);
+                    }
+                    else
+                    {
+                        OutgoingNonPriorityMessages.AddLast(msg.Value.Message);
+                    }
                 }
 
                 if (msg.Value.IsSplit && msg.Value.Message.State == MessageState.Sent)
@@ -405,7 +415,7 @@ namespace ChaseNet2.Transport
         private void SendMessages()
         {
             int totalBytesSent = 0;
-            while (OutgoingMessages.Count > 0 && totalBytesSent < _manager.Settings.MaxBytesSentPerUpdate)
+            while ((OutgoingPriorityMessages.Count > 0 || OutgoingNonPriorityMessages.Count > 0) && totalBytesSent < _manager.Settings.MaxBytesSentPerUpdate)
             {
                 if (PeerPublicKey == null)
                 {
@@ -432,59 +442,22 @@ namespace ChaseNet2.Transport
                 int packetCount = 0;
 
                 var currentPacketSize = 16 + 4; //initialization vector + preamble
-                while (OutgoingMessages.Count > 0 && currentPacketSize < maxPacketSize)
+                
+                while (OutgoingPriorityMessages.Count > 0 && currentPacketSize < maxPacketSize)
                 {
-                    var message = OutgoingMessages.First();
-                    OutgoingMessages.RemoveFirst();
-
-                    if (message.State == MessageState.Delivered || message.State == MessageState.Failed)
-                    {
+                    if (AddToSend(OutgoingPriorityMessages, maxPacketSize, writer, ref currentPacketSize, ref packetCount, ref totalBytesSent))
                         continue;
-                    }
-
-                    var serializedMessage = _manager.Serializer.Serialize(message.Content);
-                    int contentSize = serializedMessage.Length;
-
-                    if (contentSize > (_manager.Settings.MaximumTransmissionUnit / 2))
-                    {
-                        if (contentSize > _manager.Settings.MaxMessageLength)
-                        {
-                            Log.Logger.Error("Message size {Size} above the max setting {MaxSize}", contentSize, _manager.Settings.MaxMessageLength);
-                            message.State = MessageState.Failed;
-                            continue;
-                        }
-                        Log.Logger.Information("Message {MessageID} is Larger than the MTU. Splitting...", message.ID);
-
-                        SplitMessage(message, serializedMessage);
+                    else
                         break;
-                    }
-
-                    if (contentSize + currentPacketSize > maxPacketSize)
-                    {
-                        OutgoingMessages.AddFirst(message);
-                        break;
-                    }
-
-                    writer.Write(message.ID);
-                    writer.Write(message.ChannelID);
-                    writer.Write((byte)message.Type);
-                    writer.Write(serializedMessage);
-                    packetCount++;
-
-                    message.State = MessageState.Sent;
-
-                    totalBytesSent += contentSize + 16 + 4 + 4 + 1; // message id + channel id + message type + content size
-
-                    if (message.Type.HasFlag(MessageType.Reliable))
-                    {
-                        _trackedSentMessages[message.ID].LastSent = DateTime.UtcNow;
-                    }
-
-                    Log.Debug("Sending message {MessageID} on channel {ChannelID} of type {MessageType} with content {Content}", message.ID, message.ChannelID, message.Type, message.Content.GetType());
-
-                    currentPacketSize += contentSize + 16 + 4 + 4 + 1; //messageID + messageType + content
                 }
-
+                
+                while (OutgoingNonPriorityMessages.Count > 0 && currentPacketSize < maxPacketSize)
+                {
+                    if (AddToSend(OutgoingNonPriorityMessages, maxPacketSize, writer, ref currentPacketSize, ref packetCount, ref totalBytesSent))
+                        continue;
+                    else
+                        break;
+                }
                 // flush the streams
                 writer.Flush();
                 //ds.Flush();
@@ -496,6 +469,61 @@ namespace ChaseNet2.Transport
                 // send the packet
                 _manager.SendPacket(ms.ToArray(), RemoteEndpoint, ConnectionId);
             }
+        }
+
+        private bool AddToSend(LinkedList<NetworkMessage> Queue, int maxPacketSize, BinaryWriter writer, ref int currentPacketSize, ref int packetCount,
+            ref int totalBytesSent)
+        {
+            var message = Queue.First();
+            Queue.RemoveFirst();
+
+            if (message.State == MessageState.Delivered || message.State == MessageState.Failed)
+            {
+                return true;
+            }
+
+            var serializedMessage = _manager.Serializer.Serialize(message.Content);
+            int contentSize = serializedMessage.Length;
+
+            if (contentSize > (_manager.Settings.MaximumTransmissionUnit / 2))
+            {
+                if (contentSize > _manager.Settings.MaxMessageLength)
+                {
+                    Log.Logger.Error("Message size {Size} above the max setting {MaxSize}", contentSize, _manager.Settings.MaxMessageLength);
+                    message.State = MessageState.Failed;
+                    return true;
+                }
+                Log.Logger.Information("Message {MessageID} is Larger than the MTU. Splitting...", message.ID);
+
+                SplitMessage(message, serializedMessage);
+                return false;
+            }
+
+            if (contentSize + currentPacketSize > maxPacketSize)
+            {
+                Queue.AddFirst(message);
+                return false;
+            }
+
+            writer.Write(message.ID);
+            writer.Write(message.ChannelID);
+            writer.Write((byte)message.Type);
+            writer.Write(serializedMessage);
+            packetCount++;
+
+            message.State = MessageState.Sent;
+
+            totalBytesSent += contentSize + 16 + 4 + 4 + 1; // message id + channel id + message type + content size
+
+            if (message.Type.HasFlag(MessageType.Reliable))
+            {
+                _trackedSentMessages[message.ID].LastSent = DateTime.UtcNow;
+            }
+
+            Log.Debug("Sending message {MessageID} on channel {ChannelID} of type {MessageType} with content {Content}", message.ID, message.ChannelID, message.Type, message.Content.GetType());
+
+            currentPacketSize += contentSize + 16 + 4 + 4 + 1; //messageID + messageType + content
+            return false;
         }
 
         private void SplitMessage(NetworkMessage message, byte[] serializedMessage)
