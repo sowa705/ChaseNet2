@@ -83,6 +83,7 @@ namespace ChaseNet2.Transport
             var id = BitConverter.ToUInt64(bytes, 0);
 
             var c = new Connection(this, new ConnectionTarget() { EndPoint = endPoint, PublicKey = null, ConnectionId = id });
+            c.CreateConnectMessage();
             Connections.Add(c);
 
             Statistics.ConnectionCount = Connections.Count;

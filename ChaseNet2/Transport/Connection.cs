@@ -83,8 +83,6 @@ namespace ChaseNet2.Transport
             LastConnectionAttempt = DateTime.UtcNow;
 
             RegisterMessageHandler((ulong)InternalChannelType.ConnectionInternal, new InternalMessageHandler());
-
-            CreateConnectMessage();
         }
 
         NetworkMessage EnqueueInternalMessage(MessageType type, object obj)
