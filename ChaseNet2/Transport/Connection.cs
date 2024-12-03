@@ -156,7 +156,13 @@ namespace ChaseNet2.Transport
             RegisterMessageHandler(channelID, handler);
 
             var task = handler.TaskCompletionSource.Task;
-            await task;
+            var timeoutTask = Task.Delay(timeout);
+            var completedTask = await Task.WhenAny(task, timeoutTask);
+            if (completedTask == timeoutTask)
+            {
+                UnregisterMessageHandler(channelID);
+                throw new TimeoutException("Timed out waiting for channel message");
+            }
             UnregisterMessageHandler(channelID);
             return task.Result;
         }

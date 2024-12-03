@@ -56,7 +56,7 @@ namespace ChaseNet2.Session
             Log.Information("New connection from {remote}", Connection.RemoteEndpoint);
             var message = await Connection.WaitForChannelMessageAsync((ulong)InternalChannelType.SessionJoin, TimeSpan.FromSeconds(5));
 
-            var joinRequest = message.Content as JoinSession;
+            var joinRequest = message.As<JoinSession>();
 
             if (joinRequest.SessionName != SessionTracker.SessionName)
             {

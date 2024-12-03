@@ -1,5 +1,4 @@
-﻿using System;
-using System.Threading.Tasks;
+﻿using System.Threading.Tasks;
 
 namespace ChaseNet2.Transport
 {
@@ -23,6 +22,15 @@ namespace ChaseNet2.Transport
         public override string ToString()
         {
             return $"ID: {ID}, Type: {Type}, Data: {Content}, State: {State}";
+        }
+
+        public T As<T>() where T : class
+        {
+            if (Content is T content)
+            {
+                return content;
+            }
+            throw new InvalidNetworkMessageTypeException($"Cannot convert message content of type {Content.GetType()} to type {typeof(T)}");
         }
     }
 }

@@ -65,7 +65,7 @@ namespace ChaseNet2.Session
             var message = await _trackerConnection.WaitForChannelMessageAsync((ulong)InternalChannelType.SessionJoin,
                 TimeSpan.FromSeconds(3));
 
-            var response = message.Content as JoinSessionResponse;
+            var response = message.As<JoinSessionResponse>();
 
             if (response.Accepted)
             {

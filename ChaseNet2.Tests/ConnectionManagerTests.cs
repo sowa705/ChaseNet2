@@ -75,8 +75,9 @@ public class ConnectionManagerTests
         }
 
         var receivedMessage = connection2.IncomingMessages.FirstOrDefault();
-        var receivedContent = (DummyMessage)receivedMessage.Content;
-        Assert.Equal(shouldPass, receivedContent == messageContent);
+        var receivedContent = receivedMessage?.As<DummyMessage>();
+        Assert.NotNull(receivedContent);
+        Assert.Equal(shouldPass, receivedContent! == messageContent);
     }
 
     [Theory]
