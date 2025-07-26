@@ -52,27 +52,9 @@ namespace ChaseNet2.Serialization
             TypeIDs.Add(id, type);
             return id;
         }
-        public ulong RegisterSurrogate<T, T2>(bool useFullName = true)
+        public void RegisterSurrogate<T, T2>(bool useFullName = true)
         {
-            var type = typeof(T);
-            var surrogate = typeof(T2);
-
-            if (surrogate.GetCustomAttribute<ProtoContractAttribute>() == null)
-            {
-                throw new ArgumentException("Surrogate type must have the ProtoContract attribute");
-            }
-            string name = type.FullName;
-            if (!useFullName)
-                name = type.Name;
-            // compute unique ID with sha1
-            
-            var bytes = SHA256.Create().ComputeHash(Encoding.UTF8.GetBytes(name));
-
-            var id = BitConverter.ToUInt64(bytes, 0); // first 8 bytes of sha256 hash, should be unique enough
-            // Console.WriteLine("Registering type {0} with ID {1}", name, id);
-
-            TypeIDs.Add(id, type);
-            return id;
+            _runtimeTypeModel.Add<T>().SetSurrogate(typeof(T2));
         }
 
         public void RegisterChaseNetTypes()
