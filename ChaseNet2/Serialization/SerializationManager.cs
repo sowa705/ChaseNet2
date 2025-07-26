@@ -57,11 +57,6 @@ namespace ChaseNet2.Serialization
             var type = typeof(T);
             var surrogate = typeof(T2);
 
-            if (type.GetCustomAttribute<ProtoContractAttribute>() == null)
-            {
-                throw new ArgumentException("Type must have the ProtoContract attribute");
-            }
-
             if (surrogate.GetCustomAttribute<ProtoContractAttribute>() == null)
             {
                 throw new ArgumentException("Surrogate type must have the ProtoContract attribute");

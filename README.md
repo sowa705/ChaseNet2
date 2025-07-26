@@ -50,5 +50,4 @@ switch (message.Content)
 ## TODO
 * More tracker features
 * External key exchange integration
-* Unity engine support
 * Documentation
