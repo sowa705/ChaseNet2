@@ -108,4 +108,36 @@ public class ConnectionManagerTests
         Assert.True(receivedContent == messageContent);
         Assert.True(message.State == MessageState.Delivered);
     }
+    
+    [Fact]
+    public async Task ConnectionShouldStayConnectedDuring20sContinuousExchange()
+    {
+        // Arrange: get two connected managers
+        var (first, second, connFromSecond) = await GetConnectedManagers();
+        var connFromFirst = first.Connections.First();
+
+        const int updatesPerSecond = 60;
+        const int totalSeconds = 20;
+        int totalIterations = updatesPerSecond * totalSeconds;
+
+        // Act & Assert: run the loop, exchanging 1-byte messages each tick
+        for (int i = 0; i < totalIterations; i++)
+        {
+            // enqueue a tiny message in both directions
+            var msgA = connFromFirst.EnqueueMessage(MessageType.Reliable, 1000, new DummyMessage(1));
+            var msgB = connFromSecond.EnqueueMessage(MessageType.Reliable, 1000, new DummyMessage(1));
+
+            // run one tick (both managers)
+            await Helpers.UpdateManagers(first, second);
+
+            // fail immediately if either side disconnects
+            Assert.Equal(ConnectionState.Connected, connFromFirst.State);
+            Assert.Equal(ConnectionState.Connected, connFromSecond.State);
+        }
+
+        // (Optionally) verify that at least one message has been received end‑to‑end
+        Assert.NotEmpty(connFromFirst.IncomingMessages);
+        Assert.NotEmpty(connFromSecond.IncomingMessages);
+    }
+
 }
