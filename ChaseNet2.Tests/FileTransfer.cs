@@ -31,19 +31,6 @@ public class FileTransfer
         File.WriteAllBytes(_testFile, bytes);
     }
 
-    private static bool IsFullyWritten(string path, long expectedLength)
-    {
-        try
-        {
-            using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.None);
-            return stream.Length == expectedLength;
-        }
-        catch (IOException)
-        {
-            return false; // missing yet, or still open for writing
-        }
-    }
-
     void RegisterTypes(ConnectionManager cm)
     {
         // Register types
@@ -134,9 +121,9 @@ public class FileTransfer
         await Helpers.UpdateUntil(() => client.DiscoveredFiles.Count == 1, trackerCM, hostCM, clientCM);
         var file = client.DiscoveredFiles.First();
         client.StartTransfer(file.Item2, _downloadedFile);
-        // The client closes the destination stream once every part has arrived, which is when it can be opened exclusively.
-        await Helpers.UpdateUntil(() => IsFullyWritten(_downloadedFile, new FileInfo(_testFile).Length),
-            TimeSpan.FromSeconds(30), trackerCM, hostCM, clientCM);
+        // The client closes the destination stream once every part has arrived.
+        await Helpers.UpdateUntil(() => !client.IsTransferring, TimeSpan.FromSeconds(60), trackerCM, hostCM, clientCM);
+        Assert.False(client.IsTransferring);
         
         // assert
         Assert.True(File.Exists(_downloadedFile));

@@ -12,6 +12,9 @@ public class FileClient : ConnectionHandler
 
     FileTransfer? CurrentTransfer;
 
+    /// <summary>True from <see cref="StartTransfer"/> until every part has been written and the destination file is closed.</summary>
+    public bool IsTransferring => CurrentTransfer != null;
+
     NetworkMessage? SentRequest;
     private DateTime LastReceivedPart;
 
