@@ -21,7 +21,7 @@ public class FileSpec
 
         //prepare parts
 
-        using FileStream fs = new FileStream(path, FileMode.Open);
+        using FileStream fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
 
         var parts = new List<FilePartSpec>();
         spec.Parts = parts;

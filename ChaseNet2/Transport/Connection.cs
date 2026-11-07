@@ -255,7 +255,15 @@ namespace ChaseNet2.Transport
 
 
                     var message = new NetworkMessage(messageID, channelID, messageType, messageContent);
-                    RouteReceivedMessage(message);
+                    try
+                    {
+                        RouteReceivedMessage(message);
+                    }
+                    catch (Exception e)
+                    {
+                        // A faulty handler or malformed message must not take down the whole process.
+                        Log.Logger.Error(e, "Failed to handle message {MessageID} on channel {ChannelID}", messageID, channelID);
+                    }
                 }
             }
             catch (EndOfStreamException e)

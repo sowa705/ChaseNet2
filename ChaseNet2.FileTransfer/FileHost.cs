@@ -21,7 +21,7 @@ public class FileHost : ConnectionHandler, IMessageHandler
     {
         Log.Information("Starting file host");
         Spec = await FileSpec.Create(FilePath);
-        Stream = new FileStream(FilePath, FileMode.Open);
+        Stream = new FileStream(FilePath, FileMode.Open, FileAccess.Read, FileShare.Read);
     }
 
     public override Task OnManagerConnect(Connection connection)

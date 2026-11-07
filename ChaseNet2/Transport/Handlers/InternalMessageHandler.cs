@@ -14,8 +14,9 @@ namespace ChaseNet2.Transport
                 switch (message.Content)
                 {
                     case Ack ack:
-                        var sentMessage = connection._trackedSentMessages[ack.MessageID];
-                        if (sentMessage != null)
+                        // The message may already be gone: delivered (duplicate/late ack), failed after too many
+                        // resends, or never tracked at all. None of those is an error worth crashing the host for.
+                        if (connection._trackedSentMessages.TryGetValue(ack.MessageID, out var sentMessage))
                         {
                             if (sentMessage.Message.State == MessageState.Delivered)
                             {

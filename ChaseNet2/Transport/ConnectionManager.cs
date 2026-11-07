@@ -274,7 +274,14 @@ namespace ChaseNet2.Transport
             {
                 return;
             }
-            c.ReadInputStream(ms);
+            try
+            {
+                c.ReadInputStream(ms);
+            }
+            catch (Exception e)
+            {
+                Log.Logger.Error(e, "Error processing packet from {EndPoint} for connection {ConnectionId}", remoteEP, targetConnection);
+            }
         }
 
         public byte[] ComputeSharedSecretKey(AsymmetricKeyParameter remotePublicKey, ulong connectionID)
