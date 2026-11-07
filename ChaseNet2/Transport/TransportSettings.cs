@@ -3,7 +3,9 @@ namespace ChaseNet2.Transport
     public class TransportSettings
     {
         /// <summary>
-        /// UDP socket buffer size, required for large packets
+        /// UDP socket buffer size, required for large packets.
+        /// Linux silently clamps this to net.core.rmem_max (212992 bytes by default), so
+        /// <see cref="MaxBytesSentPerUpdate"/> must stay small enough for a burst to fit in the smallest buffer.
         /// </summary>
         public int ReceiveBufferSize { get; set; } = 1024 * 1024 * 32;
 
@@ -13,9 +15,11 @@ namespace ChaseNet2.Transport
         public int MaxMessageLength { get; set; } = 1024 * 1024 * 16;
 
         /// <summary>
-        /// Throttles the number of messages sent per network tick.
+        /// Throttles the number of bytes sent per connection per network tick. Sending more than the peer's socket
+        /// buffer holds in one burst makes the OS drop the excess, which for large messages causes long resend storms.
+        /// The default fits the default Linux buffer; raise it together with net.core.rmem_max.
         /// </summary>
-        public int MaxBytesSentPerUpdate { get; set; } = 1024 * 1024 * 16;
+        public int MaxBytesSentPerUpdate { get; set; } = 64 * 1024;
 
         /// <summary>
         /// Max size of a UDP packet sent over the network.

@@ -27,9 +27,10 @@ public class ConnectionManagerTests
     public static async Task<(ConnectionManager, ConnectionManager, Connection)> GetConnectedManagers()
     {
         int port = Random.Shared.Next(10000, 20000);
-        var first = new ConnectionManager(port);
+        // Linux clamps socket buffers to 208 KB by default; test with that size everywhere so Windows catches burst-loss regressions too.
+        var first = new ConnectionManager(new TransportSettings { ReceiveBufferSize = 212992 }, port);
         first.Settings.AcceptNewConnections = true;
-        var second = new ConnectionManager();
+        var second = new ConnectionManager(new TransportSettings { ReceiveBufferSize = 212992 });
 
         first.Serializer.RegisterType(typeof(DummyMessage));
         second.Serializer.RegisterType(typeof(DummyMessage));
