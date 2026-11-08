@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Linq;
 using System.Net;
 using System.Reflection;
 using System.Security.Cryptography;
@@ -11,15 +10,23 @@ using ChaseNet2.Transport.Messages;
 using Org.BouncyCastle.Crypto;
 using ProtoBuf;
 using ProtoBuf.Meta;
-using Serilog;
 
 namespace ChaseNet2.Serialization
 {
+    /// <summary>
+    /// Maps message types to wire IDs and serializes them with protobuf-net.
+    /// Thread-safe: types may be registered from any thread while other threads serialize and deserialize.
+    /// Registration publishes a new copy of the lookup tables (copy-on-write), so readers never take a lock.
+    /// </summary>
     public class SerializationManager
     {
-        Dictionary<ulong, Type> TypeIDs = new Dictionary<ulong, Type>();
+        private readonly object _registrationLock = new object();
 
-        RuntimeTypeModel _runtimeTypeModel;
+        // Copy-on-write snapshots; replaced (never mutated) under _registrationLock.
+        private volatile Dictionary<ulong, Type> _typesById = new Dictionary<ulong, Type>();
+        private volatile Dictionary<Type, ulong> _idsByType = new Dictionary<Type, ulong>();
+
+        private readonly RuntimeTypeModel _runtimeTypeModel;
 
         public SerializationManager()
         {
@@ -28,10 +35,12 @@ namespace ChaseNet2.Serialization
 
         public ulong RegisterType<T>(bool useFullName = true)
         {
-            var type = typeof(T);
-            return RegisterType(type, useFullName);
+            return RegisterType(typeof(T), useFullName);
         }
 
+        /// <summary>
+        /// Registers a type and returns its wire ID. Registering the same type again returns the existing ID.
+        /// </summary>
         public ulong RegisterType(Type type, bool useFullName = true)
         {
             if (type.GetCustomAttribute<ProtoContractAttribute>() == null)
@@ -39,23 +48,44 @@ namespace ChaseNet2.Serialization
                 throw new ArgumentException("Type must have the ProtoContract attribute");
             }
 
-            string name = type.FullName;
-            if (!useFullName)
-                name = type.Name;
+            string name = useFullName ? type.FullName! : type.Name;
 
-            // compute unique ID with sha1
-            var bytes = SHA256.Create().ComputeHash(Encoding.UTF8.GetBytes(name));
+            // first 8 bytes of a sha256 hash of the name, should be unique enough
+            var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(name));
+            var id = BitConverter.ToUInt64(bytes, 0);
 
-            var id = BitConverter.ToUInt64(bytes, 0); // first 8 bytes of sha256 hash, should be unique enough
-                                                      // Console.WriteLine("Registering type {0} with ID {1}", name, id);
+            lock (_registrationLock)
+            {
+                if (_typesById.TryGetValue(id, out var existing))
+                {
+                    if (existing == type)
+                    {
+                        return id;
+                    }
+                    throw new ArgumentException($"Type {type.FullName} has the same wire ID as already registered type {existing.FullName}");
+                }
 
-            TypeIDs.Add(id, type);
+                var typesById = new Dictionary<ulong, Type>(_typesById) { [id] = type };
+                var idsByType = new Dictionary<Type, ulong>(_idsByType);
+                // a type registered under both its short and full name keeps the first ID for sending
+                idsByType.TryAdd(type, id);
+
+                _typesById = typesById;
+                _idsByType = idsByType;
+            }
+
             return id;
         }
+
         public void RegisterSurrogate<T, T2>(bool useFullName = true)
         {
-            _runtimeTypeModel.Add<T>().SetSurrogate(typeof(T2));
+            lock (_registrationLock)
+            {
+                _runtimeTypeModel.Add<T>().SetSurrogate(typeof(T2));
+            }
         }
+
+        public bool IsRegistered(Type type) => _idsByType.ContainsKey(type);
 
         public void RegisterChaseNetTypes()
         {
@@ -70,35 +100,37 @@ namespace ChaseNet2.Serialization
             RegisterType(typeof(JoinSessionResponse));
             RegisterType(typeof(SessionUpdate));
 
-            _runtimeTypeModel.Add<AsymmetricKeyParameter>().SetSurrogate(typeof(AsymmetricKeyParameterSurrogate));
-            _runtimeTypeModel.Add<IPEndPoint>().SetSurrogate(typeof(IPEndPointSurrogate));
+            RegisterSurrogate<AsymmetricKeyParameter, AsymmetricKeyParameterSurrogate>();
+            RegisterSurrogate<IPEndPoint, IPEndPointSurrogate>();
         }
 
         /// <summary>
-        /// Writes an object to the binary writer, fails if the object does not implement IStreamSerializable or is not registered, returns written bytes
+        /// Serializes an object to bytes (type ID, length, protobuf payload). Unregistered types are registered on the fly.
         /// </summary>
         public byte[] Serialize<T>(T obj)
         {
-            BinaryWriter writer = new BinaryWriter(new MemoryStream());
-            var type = obj.GetType();
-            var id = TypeIDs.FirstOrDefault(x => x.Value == type).Key;
-
-            if (id == 0)
+            if (obj is null)
             {
-                id = RegisterType(obj.GetType());
+                throw new ArgumentNullException(nameof(obj));
             }
-            // write type ID
-            writer.Write(BitConverter.GetBytes(id));
 
-            // write data
+            var type = obj.GetType();
+            if (!_idsByType.TryGetValue(type, out var id))
+            {
+                id = RegisterType(type);
+            }
+
             var protostream = new MemoryStream();
             _runtimeTypeModel.Serialize(protostream, obj);
 
-            var data = protostream.ToArray();
-            writer.Write(data.Length);
-            writer.Write(data);
+            var output = new MemoryStream((int)protostream.Length + 12);
+            var writer = new BinaryWriter(output);
+            writer.Write(id);
+            writer.Write((int)protostream.Length);
+            writer.Write(protostream.GetBuffer(), 0, (int)protostream.Length);
+            writer.Flush();
 
-            return ((MemoryStream)writer.BaseStream).ToArray();
+            return output.ToArray();
         }
 
         public object Deserialize(byte[] data)
@@ -111,18 +143,19 @@ namespace ChaseNet2.Serialization
 
         public object Deserialize(BinaryReader reader)
         {
-            // read type ID
-            var id = BitConverter.ToUInt64(reader.ReadBytes(8), 0);
+            var id = reader.ReadUInt64();
 
-            if (!TypeIDs.ContainsKey(id))
+            if (!_typesById.TryGetValue(id, out var type))
             {
                 throw new Exception("Cannot deserialize object with an unknown type ID " + id);
             }
 
-            var type = TypeIDs[id];
-
             var length = reader.ReadInt32();
             var data = reader.ReadBytes(length);
+            if (data.Length != length)
+            {
+                throw new EndOfStreamException("Message payload is truncated");
+            }
 
             var obj = _runtimeTypeModel.Deserialize(type, new MemoryStream(data));
 
@@ -136,7 +169,7 @@ namespace ChaseNet2.Serialization
 
         public T Deserialize<T>(BinaryReader reader) where T : class
         {
-            return Deserialize(reader) as T;
+            return (Deserialize(reader) as T)!;
         }
     }
 }
