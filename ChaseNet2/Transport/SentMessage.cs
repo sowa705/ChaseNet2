@@ -1,9 +1,11 @@
 using System;
 using System.Collections.Generic;
-using System.Threading.Tasks;
 
 namespace ChaseNet2.Transport
 {
+    /// <summary>
+    /// Tracking record for a reliable message awaiting acknowledgement. Owned by the network thread.
+    /// </summary>
     public class SentMessage
     {
         public NetworkMessage Message { get; set; }
@@ -12,7 +14,20 @@ namespace ChaseNet2.Transport
         public bool IsSplit { get; set; }
         public List<NetworkMessage> SentFragmentMessages { get; set; }
 
-        public TaskCompletionSource<bool>? DeliveryTask { get; set; }
+        /// <summary>
+        /// For a fragment: the tracking record of the split message it belongs to.
+        /// </summary>
+        public SentMessage? SplitParent { get; set; }
+
+        /// <summary>
+        /// For a split message: when a fragment was last acknowledged (or when it was split).
+        /// </summary>
+        public DateTime LastProgress { get; set; }
+
+        /// <summary>
+        /// For a split message: number of fragments acknowledged so far.
+        /// </summary>
+        public int DeliveredFragmentCount { get; set; }
 
         public SentMessage(NetworkMessage message)
         {

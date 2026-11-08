@@ -1,8 +1,11 @@
 using System.Threading.Tasks;
-using Serilog;
 
 namespace ChaseNet2.Transport
 {
+    /// <summary>
+    /// Completes a task with the first message received on its channel. Thread-safe, so it is registered
+    /// with <see cref="MessageDispatchMode.Inline"/>.
+    /// </summary>
     public class TaskHandler : IMessageHandler
     {
         public TaskCompletionSource<NetworkMessage> TaskCompletionSource;
@@ -11,9 +14,10 @@ namespace ChaseNet2.Transport
         {
             TaskCompletionSource = new TaskCompletionSource<NetworkMessage>(TaskCreationOptions.RunContinuationsAsynchronously);
         }
+
         public void HandleMessage(Connection connection, NetworkMessage message)
         {
-            TaskCompletionSource.SetResult(message);
+            TaskCompletionSource.TrySetResult(message);
         }
     }
 }

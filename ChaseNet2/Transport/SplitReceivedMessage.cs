@@ -10,17 +10,19 @@ namespace ChaseNet2.Transport
         public ulong OriginalMessageId;
         public ulong ChannelId;
         public MessageType Type;
-        public List<int> ReceivedParts;
+        public HashSet<int> ReceivedParts;
         public int TotalParts;
+        public int PartSize;
         public byte[] Buffer;
 
         public SplitReceivedMessage(SplitMessagePart part)
         {
             OriginalMessageId = part.OriginalMessageId;
             TotalParts = part.TotalParts;
+            PartSize = part.PartSize;
             ChannelId = part.Channel;
             Type = part.OriginalMessageType;
-            ReceivedParts = new List<int>();
+            ReceivedParts = new HashSet<int>();
             Buffer = new byte[part.TotalParts * part.PartSize];
 
             AddPart(part);
@@ -28,6 +30,12 @@ namespace ChaseNet2.Transport
 
         public void AddPart(SplitMessagePart part)
         {
+            if (part.TotalParts != TotalParts || part.PartSize != PartSize || part.Data is null || part.Data.Length > PartSize ||
+                part.PartNumber < 0 || part.PartNumber >= TotalParts)
+            {
+                throw new ArgumentException($"Split message part does not match message {OriginalMessageId}");
+            }
+
             if (ReceivedParts.Contains(part.PartNumber))
                 return;
 

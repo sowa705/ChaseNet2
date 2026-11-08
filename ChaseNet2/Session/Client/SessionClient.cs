@@ -53,17 +53,20 @@ namespace ChaseNet2.Session
         {
             var joinSessionMessage = new JoinSession() { SessionName = SessionId };
 
-            _connectMessage = _trackerConnection.EnqueueMessage(MessageType.Reliable, (ulong)InternalChannelType.SessionJoin, joinSessionMessage);
-            await _trackerConnection.WaitForDeliveryAsync(_connectMessage);
+            // listen before sending: the response can arrive right after the tracker acknowledges the request
+            var responseTask = _trackerConnection.WaitForChannelMessageAsync((ulong)InternalChannelType.SessionJoin,
+                TimeSpan.FromSeconds(10));
 
-            if (_connectMessage.State == MessageState.Failed)
+            _connectMessage = _trackerConnection.EnqueueMessage(MessageType.Reliable, (ulong)InternalChannelType.SessionJoin, joinSessionMessage);
+            var delivered = await _trackerConnection.WaitForDeliveryAsync(_connectMessage);
+
+            if (!delivered)
             {
                 throw new Exception("Failed to connect to session");
             }
             State = SessionClientState.AwaitingResponse;
 
-            var message = await _trackerConnection.WaitForChannelMessageAsync((ulong)InternalChannelType.SessionJoin,
-                TimeSpan.FromSeconds(3));
+            var message = await responseTask;
 
             var response = message.As<JoinSessionResponse>();
 

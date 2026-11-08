@@ -80,7 +80,16 @@ public class Program
         Manager.Serializer.RegisterType<FilePartRequest>();
         Manager.Serializer.RegisterType<FilePartResponse>();
         Manager.Settings.TargetUpdateRate = 50;
-        Manager.StartBackgroundThread();
+        // the network thread keeps connections alive; handlers run on this dispatch loop
+        Manager.Start();
+        _ = Task.Run(async () =>
+        {
+            while (true)
+            {
+                Manager.Dispatch();
+                await Task.Delay(1000 / 50);
+            }
+        });
 
         Client.Connect();
 
