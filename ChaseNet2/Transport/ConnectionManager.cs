@@ -41,6 +41,8 @@ namespace ChaseNet2.Transport
     {
         internal const ulong ConnectionRequestId = 0xADDDDDDDD;
         internal const ulong ConnectionResponseId = 0xBDDDDDDDD;
+        private const int MaxPacketsPerReceiveBatch = 64;
+        private const int MaxPacketsPerPump = 1024;
 
         private readonly AsymmetricCipherKeyPair _keyPair;
         public AsymmetricKeyParameter PublicKey { get => _keyPair.Public; }
@@ -356,7 +358,9 @@ namespace ChaseNet2.Transport
                         var micro = (int)Math.Min(remaining.TotalMicroseconds, 50_000);
                         if (micro > 0 && _client.Client.Poll(micro, SelectMode.SelectRead))
                         {
-                            ReceiveAvailable(readAtLeastOne: true);
+                            // bounded, so a steady inflow cannot starve the tick that sends acks; the loop comes
+                            // straight back here (Poll returns at once) while the tick is not due
+                            ReceiveAvailable(readAtLeastOne: true, MaxPacketsPerReceiveBatch);
                         }
                     }
                 }
@@ -586,7 +590,8 @@ namespace ChaseNet2.Transport
                 closing.FailOutstandingMessages();
             }
 
-            ReceiveAvailable(readAtLeastOne: false);
+            // bounded so connection updates (acks, resends, sends) always run, even under a flood
+            ReceiveAvailable(readAtLeastOne: false, MaxPacketsPerPump);
 
             var connections = _connections;
             foreach (var connection in connections)
@@ -625,11 +630,11 @@ namespace ChaseNet2.Transport
             return stopwatch.Elapsed;
         }
 
-        private void ReceiveAvailable(bool readAtLeastOne)
+        private void ReceiveAvailable(bool readAtLeastOne, int maxPackets)
         {
             // readAtLeastOne: Poll reported the socket readable, which can also mean an empty datagram or a pending
             // error with Available == 0; one Receive consumes it so the next Poll does not return immediately again.
-            while (readAtLeastOne || _client.Available > 0)
+            for (int received = 0; received < maxPackets && (readAtLeastOne || _client.Available > 0); received++)
             {
                 readAtLeastOne = false;
 

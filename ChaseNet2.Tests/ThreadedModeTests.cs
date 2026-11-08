@@ -13,7 +13,6 @@ namespace ChaseNet2.Tests;
 public class ThreadedModeTests
 {
     private const string NetworkThreadName = "ChaseNet2 network";
-
     private sealed class Pair : IDisposable
     {
         public required ConnectionManager Server { get; init; }
@@ -181,7 +180,8 @@ public class ThreadedModeTests
         Assert.Equal(Enumerable.Range(0, threadCount * perThread), handler.Received.Select(x => NumberOf(x.Message)).Order());
 
         var results = await Task.WhenAll(sent.Select(x => pair.ClientConnection.WaitForDeliveryAsync(x)));
-        Assert.All(results, Assert.True);
+        Assert.True(results.All(r => r),
+            $"{results.Count(r => !r)} messages failed. Client: {pair.Client.Statistics}. Server: {pair.Server.Statistics}");
     }
 
     [Fact]

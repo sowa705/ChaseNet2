@@ -568,7 +568,9 @@ namespace ChaseNet2.Transport
                     continue;
                 }
 
-                if (now > sent.LastSent + GetResendInterval(message.Type))
+                // back off exponentially (x1, x2, x4, capped at x4) so a slow receiver is not buried in resends
+                var backoff = 1 << Math.Min(sent.ResendCount, 2);
+                if (now > sent.LastSent + GetResendInterval(message.Type) * backoff)
                 {
                     if (sent.SplitParent != null && sent.SplitParent.Message.State is MessageState.Delivered or MessageState.Failed)
                     {
